@@ -37,7 +37,38 @@ export async function getSettings(db: IDBDatabase): Promise<SettingsDoc> {
     req.onsuccess = () => res(req.result as SettingsDoc | undefined);
     req.onerror = () => rej(req.error);
   });
-  if (settings) return settings;
+
+  if (settings) {
+    // Migrate existing settings to include emoticons if missing
+    let needsUpdate = false;
+    const migratedSettings = { ...settings };
+
+    if (migratedSettings.categories) {
+      migratedSettings.categories = migratedSettings.categories.map(
+        (category) => {
+          if (!category.emoticon) {
+            needsUpdate = true;
+            // Assign default emoticons based on category ID
+            let defaultEmoticon = "🤝";
+            if (category.id === "business") defaultEmoticon = "💼";
+            else if (category.id === "colleague") defaultEmoticon = "👥";
+            else if (category.id === "acquaintance") defaultEmoticon = "🤝";
+
+            return { ...category, emoticon: defaultEmoticon };
+          }
+          return category;
+        }
+      );
+    }
+
+    if (needsUpdate) {
+      await putSettings(db, migratedSettings);
+      return migratedSettings;
+    }
+
+    return settings;
+  }
+
   const seeded = DEFAULT_SETTINGS;
   await putSettings(db, seeded);
   return seeded;
@@ -198,6 +229,7 @@ export const DEFAULT_SETTINGS: SettingsDoc = {
       label_en: "Business relationship",
       value: 80,
       color: "#28a745", // Green
+      emoticon: "💼",
     },
     {
       id: "colleague",
@@ -205,6 +237,7 @@ export const DEFAULT_SETTINGS: SettingsDoc = {
       label_en: "Colleague",
       value: 60,
       color: "#007bff", // Blue
+      emoticon: "👥",
     },
     {
       id: "acquaintance",
@@ -212,6 +245,7 @@ export const DEFAULT_SETTINGS: SettingsDoc = {
       label_en: "Acquaintance",
       value: 40,
       color: "#ffc107", // Yellow/Orange
+      emoticon: "🤝",
     },
   ],
   eventTypes: [

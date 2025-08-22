@@ -6,6 +6,7 @@ export interface CategoryDef {
   label_en: string;
   value: number; // 0–100
   color: string; // CSS color value (hex, rgb, etc.)
+  emoticon: string; // Emoticon icon for the category
 }
 
 export interface EventTypeDef {

@@ -109,6 +109,8 @@ label {
   padding: 12px;
   box-shadow: 0 4px 16px var(--shadow-light);
   position: relative;
+  width: 400px;
+  min-height: ;
 }
 
 /* Common dialog styles */
@@ -221,12 +223,61 @@ label {
   min-width: 0;
 }
 
+/* Interaction row styles */
+.interaction-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.interaction-text {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.category-emoticon {
+  font-size: 18px;
+  margin-top: -6px;
+}
+
 /* Common badge styles */
 .badge {
   padding: 2px 6px;
   border-radius: 999px;
   border: 1px solid #ccc;
+  font-size: 10px;
+}
+
+/* Score display styles */
+.score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.score-number {
   font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.score-badge {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.delete-event__label {
+  position: relative;
+  top: -2px;
+}
+
+/* Card content styles */
+.card-content {
+  margin-bottom: 12px;
+  min-height: 80px;
 }
 
 /* Responsive utilities */

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && npm run build:content && npm run build:others",
+    "build": "npm run build:css && tsc -b && npm run build:content && npm run build:others",
+    "build:css": "node scripts/build-css.js",
     "build:content": "vite build --config vite.content.config.ts",
     "build:others": "vite build --config vite.others.config.ts",
     "lint": "echo 'add your linter of choice'"

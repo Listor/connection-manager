@@ -169,6 +169,160 @@ h2 {
   border-top: 1px solid var(--border-color);
 }
 
+/* Category Management Styles */
+.categories-container {
+  margin-top: 16px;
+}
+
+.category-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.category-item:hover {
+  border-color: var(--linkedin-blue);
+  box-shadow: 0 2px 8px var(--shadow-light);
+}
+
+.category-labels {
+  flex: 1;
+  margin-left: 8px;
+}
+
+.category-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.category-actions button {
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.edit-btn {
+  background: var(--linkedin-blue);
+  color: white;
+}
+
+.edit-btn:hover {
+  background: var(--linkedin-blue-dark);
+}
+
+.delete-btn {
+  background: var(--danger-color, #dc3545);
+  color: white;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: var(--danger-color-dark, #c82333);
+}
+
+.delete-btn:disabled {
+  background: var(--border-color);
+  cursor: not-allowed;
+}
+
+/* Dialog Styles */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  min-width: 400px;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px var(--shadow-dark);
+}
+
+.dialog h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.category-form .form-group {
+  margin-bottom: 20px;
+}
+
+.category-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.category-form input,
+.category-form select,
+.category-form textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.category-form input:focus,
+.category-form select:focus,
+.category-form textarea:focus {
+  outline: none;
+  border-color: var(--linkedin-blue);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.category-form textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Message Styles */
+#message-container {
+  margin-top: 16px;
+}
+
+.success {
+  background: var(--success-color);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.error {
+  background: var(--danger-color, #dc3545);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   body {
@@ -191,5 +345,21 @@ h2 {
 
   .input-row input {
     width: 100%;
+  }
+
+  .category-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .category-actions {
+    align-self: stretch;
+    justify-content: flex-end;
+  }
+
+  .dialog {
+    min-width: 90vw;
+    margin: 20px;
   }
 }

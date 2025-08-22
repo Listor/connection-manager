@@ -185,6 +185,486 @@ function showLinkedInMessage(app: HTMLElement) {
   checkConnection();
 }
 
+// Predefined color palette that matches the existing style
+const CATEGORY_COLORS = [
+  "#28a745", // Green (business)
+  "#007bff", // Blue (colleague)
+  "#ffc107", // Yellow/Orange (acquaintance)
+  "#dc3545", // Red
+  "#6f42c1", // Purple
+  "#fd7e14", // Orange
+  "#20c997", // Teal
+  "#e83e8c", // Pink
+  "#6c757d", // Gray
+  "#17a2b8", // Cyan
+];
+
+// Popular emoticons for categories
+const CATEGORY_EMOTICONS = [
+  "💼",
+  "👥",
+  "🤝",
+  "❤️",
+  "⭐",
+  "🔥",
+  "💡",
+  "🎯",
+  "🚀",
+  "💎",
+  "🌟",
+  "🎉",
+  "🏆",
+  "💪",
+  "🎨",
+  "📚",
+  "💻",
+  "🎵",
+  "🏠",
+  "🌍",
+  "👨‍💼",
+  "👩‍💼",
+  "👨‍🎓",
+  "👩‍🎓",
+  "👨‍🔬",
+  "👩‍🔬",
+  "👨‍⚕️",
+  "👩‍⚕️",
+  "👨‍🏫",
+  "👩‍🏫",
+  "👨‍💻",
+  "👩‍💻",
+  "👨‍🎨",
+  "👩‍🎨",
+  "👨‍🚀",
+  "👩‍🚀",
+  "👨‍⚖️",
+  "👩‍⚖️",
+  "👨‍🌾",
+  "👩‍🌾",
+];
+
+// Function to create category management section
+function createCategoryManagementSection(
+  settings: any,
+  messageContainer: HTMLElement
+) {
+  const section = h("div", { className: "section" });
+  const title = h("h2", { innerText: "Kategorien verwalten" });
+
+  const helpText = h("div", {
+    className: "help-text",
+    innerText:
+      "Erstellen Sie eigene Kategorien oder bearbeiten Sie die Standard-Kategorien. Jede Kategorie benötigt einen Namen in Deutsch und Englisch, ein Emoticon und eine Farbe.",
+  });
+
+  const categoriesContainer = h("div", { className: "categories-container" });
+
+  // Function to render a category item
+  function renderCategory(category: any, index: number) {
+    const categoryItem = h("div", { className: "category-item" });
+
+    const emoticonDisplay = h("span", {
+      innerText: category.emoticon,
+      style: "font-size: 24px; margin-right: 8px;",
+    });
+
+    const colorIndicator = h("div", {
+      style: `width: 20px; height: 20px; background-color: ${category.color}; border-radius: 50%; margin-right: 8px; border: 2px solid #ddd;`,
+    });
+
+    const labels = h("div", { className: "category-labels" });
+    const deLabel = h("div", {
+      innerText: `${category.label_de} (${category.value} Punkte)`,
+      style: "font-weight: bold;",
+    });
+    const enLabel = h("div", {
+      innerText: category.label_en,
+      style: "font-size: 12px; color: #666;",
+    });
+    labels.append(deLabel, enLabel);
+
+    const actions = h("div", { className: "category-actions" });
+    const editBtn = h("button", {
+      innerText: "Bearbeiten",
+      className: "edit-btn",
+      style: "margin-right: 8px; padding: 4px 8px; font-size: 12px;",
+    });
+    const deleteBtn = h("button", {
+      innerText: "Löschen",
+      className: "delete-btn",
+      style: "padding: 4px 8px; font-size: 12px; background-color: #dc3545;",
+    });
+
+    // Disable delete for default categories
+    if (["business", "colleague", "acquaintance"].includes(category.id)) {
+      deleteBtn.disabled = true;
+      deleteBtn.style.opacity = "0.5";
+      deleteBtn.title = "Standard-Kategorien können nicht gelöscht werden";
+    }
+
+    actions.append(editBtn, deleteBtn);
+
+    categoryItem.append(emoticonDisplay, colorIndicator, labels, actions);
+
+    // Edit functionality
+    editBtn.addEventListener("click", () => {
+      showCategoryDialog(category, index, true);
+    });
+
+    // Delete functionality
+    deleteBtn.addEventListener("click", async () => {
+      if (
+        confirm(
+          `Möchten Sie die Kategorie "${category.label_de}" wirklich löschen?`
+        )
+      ) {
+        settings.categories.splice(index, 1);
+        await putSettings(settings);
+        renderCategories();
+
+        const successMsg = h("div", {
+          className: "success",
+          innerText: `Kategorie "${category.label_de}" wurde gelöscht.`,
+        });
+        messageContainer.appendChild(successMsg);
+        setTimeout(() => {
+          if (messageContainer.contains(successMsg)) {
+            messageContainer.removeChild(successMsg);
+          }
+        }, 3000);
+      }
+    });
+
+    return categoryItem;
+  }
+
+  // Function to render all categories
+  function renderCategories() {
+    categoriesContainer.innerHTML = "";
+    settings.categories.forEach((category: any, index: number) => {
+      categoriesContainer.appendChild(renderCategory(category, index));
+    });
+  }
+
+  // Function to show category dialog (add/edit)
+  function showCategoryDialog(
+    category: any = null,
+    index: number = -1,
+    isEdit: boolean = false
+  ) {
+    const dialogOverlay = document.createElement("div");
+    dialogOverlay.className = "dialog-overlay";
+    dialogOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    `;
+
+    const dialog = document.createElement("div");
+    dialog.className = "dialog";
+    dialog.style.cssText = `
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      min-width: 400px;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+    `;
+
+    const title = h("h3", {
+      innerText: isEdit ? "Kategorie bearbeiten" : "Neue Kategorie erstellen",
+    });
+
+    // Form fields
+    const form = h("div", { className: "category-form" });
+
+    // German label
+    const deLabelGroup = h("div", { className: "form-group" });
+    const deLabel = h("label", { innerText: "Name (Deutsch):" });
+    const deInput = h("input", {
+      type: "text",
+      value: category?.label_de || "",
+      placeholder: "z.B. Geschäftsbeziehung",
+      style:
+        "width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 4px;",
+    });
+    deLabelGroup.append(deLabel, deInput);
+
+    // English label
+    const enLabelGroup = h("div", { className: "form-group" });
+    const enLabel = h("label", { innerText: "Name (English):" });
+    const enInput = h("input", {
+      type: "text",
+      value: category?.label_en || "",
+      placeholder: "e.g. Business relationship",
+      style:
+        "width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 4px;",
+    });
+    enLabelGroup.append(enLabel, enInput);
+
+    // Value
+    const valueGroup = h("div", { className: "form-group" });
+    const valueLabel = h("label", { innerText: "Punkte (0-100):" });
+    const valueInput = h("input", {
+      type: "number",
+      min: "0",
+      max: "100",
+      value: category?.value || 50,
+      style:
+        "width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ddd; border-radius: 4px;",
+    });
+    valueGroup.append(valueLabel, valueInput);
+
+    // Emoticon selection
+    const emoticonGroup = h("div", { className: "form-group" });
+    const emoticonLabel = h("label", { innerText: "Emoticon:" });
+    const emoticonContainer = h("div", {
+      style:
+        "display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; margin-top: 8px; max-height: 120px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px;",
+    });
+
+    let selectedEmoticon = category?.emoticon || "💼";
+
+    CATEGORY_EMOTICONS.forEach((emoticon) => {
+      const emoticonBtn = h("button", {
+        innerText: emoticon,
+        style: `
+          font-size: 20px;
+          padding: 8px;
+          border: 2px solid ${
+            emoticon === selectedEmoticon ? "#007bff" : "#ddd"
+          };
+          background: ${emoticon === selectedEmoticon ? "#e3f2fd" : "white"};
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s;
+        `,
+      });
+
+      emoticonBtn.addEventListener("click", () => {
+        // Update selection
+        selectedEmoticon = emoticon;
+        emoticonContainer.querySelectorAll("button").forEach((btn) => {
+          btn.style.borderColor = "#ddd";
+          btn.style.background = "white";
+        });
+        emoticonBtn.style.borderColor = "#007bff";
+        emoticonBtn.style.background = "#e3f2fd";
+      });
+
+      emoticonContainer.appendChild(emoticonBtn);
+    });
+    emoticonGroup.append(emoticonLabel, emoticonContainer);
+
+    // Color selection
+    const colorGroup = h("div", { className: "form-group" });
+    const colorLabel = h("label", { innerText: "Farbe:" });
+    const colorContainer = h("div", {
+      style:
+        "display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 8px;",
+    });
+
+    let selectedColor = category?.color || CATEGORY_COLORS[0];
+
+    CATEGORY_COLORS.forEach((color) => {
+      const colorBtn = h("button", {
+        style: `
+          width: 40px;
+          height: 40px;
+          border: 3px solid ${color === selectedColor ? "#333" : "#ddd"};
+          background-color: ${color};
+          border-radius: 50%;
+          cursor: pointer;
+          transition: all 0.2s;
+        `,
+      });
+
+      colorBtn.addEventListener("click", () => {
+        selectedColor = color;
+        colorContainer.querySelectorAll("button").forEach((btn) => {
+          btn.style.borderColor = "#ddd";
+        });
+        colorBtn.style.borderColor = "#333";
+      });
+
+      colorContainer.appendChild(colorBtn);
+    });
+    colorGroup.append(colorLabel, colorContainer);
+
+    // Buttons
+    const buttonGroup = h("div", {
+      style:
+        "display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end;",
+    });
+
+    const cancelBtn = h("button", {
+      innerText: "Abbrechen",
+      style:
+        "padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;",
+    });
+
+    const saveBtn = h("button", {
+      innerText: isEdit ? "Aktualisieren" : "Erstellen",
+      style:
+        "padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;",
+    });
+
+    buttonGroup.append(cancelBtn, saveBtn);
+
+    // Event handlers
+    cancelBtn.addEventListener("click", () => {
+      document.body.removeChild(dialogOverlay);
+    });
+
+    saveBtn.addEventListener("click", async () => {
+      const labelDe = deInput.value.trim();
+      const labelEn = enInput.value.trim();
+      const value = parseInt(valueInput.value);
+
+      if (!labelDe || !labelEn) {
+        alert("Bitte füllen Sie alle Felder aus.");
+        return;
+      }
+
+      if (value < 0 || value > 100) {
+        alert("Punkte müssen zwischen 0 und 100 liegen.");
+        return;
+      }
+
+      const newCategory = {
+        id: category?.id || `custom_${Date.now()}`,
+        label_de: labelDe,
+        label_en: labelEn,
+        value: value,
+        color: selectedColor,
+        emoticon: selectedEmoticon,
+      };
+
+      if (isEdit) {
+        settings.categories[index] = newCategory;
+      } else {
+        settings.categories.push(newCategory);
+      }
+
+      await putSettings(settings);
+      renderCategories();
+
+      const successMsg = h("div", {
+        className: "success",
+        innerText: isEdit
+          ? "Kategorie wurde aktualisiert."
+          : "Neue Kategorie wurde erstellt.",
+      });
+      messageContainer.appendChild(successMsg);
+      setTimeout(() => {
+        if (messageContainer.contains(successMsg)) {
+          messageContainer.removeChild(successMsg);
+        }
+      }, 3000);
+
+      document.body.removeChild(dialogOverlay);
+    });
+
+    form.append(
+      deLabelGroup,
+      enLabelGroup,
+      valueGroup,
+      emoticonGroup,
+      colorGroup
+    );
+    dialog.append(title, form, buttonGroup);
+    dialogOverlay.appendChild(dialog);
+    document.body.appendChild(dialogOverlay);
+  }
+
+  // Add new category button
+  const addButton = h("button", {
+    innerText: "Neue Kategorie hinzufügen",
+    style:
+      "margin-bottom: 16px; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;",
+  });
+
+  const resetButton = h("button", {
+    innerText: "Standard-Kategorien wiederherstellen",
+    style:
+      "margin-bottom: 16px; padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;",
+  });
+
+  const buttonContainer = h("div", {
+    style: "margin-bottom: 16px;",
+  });
+
+  addButton.addEventListener("click", () => {
+    showCategoryDialog();
+  });
+
+  resetButton.addEventListener("click", async () => {
+    if (
+      confirm(
+        "Möchten Sie wirklich alle Kategorien auf die Standard-Kategorien zurücksetzen? Dies kann nicht rückgängig gemacht werden."
+      )
+    ) {
+      // Reset to default categories
+      settings.categories = [
+        {
+          id: "business",
+          label_de: "Geschäftsbeziehung",
+          label_en: "Business relationship",
+          value: 80,
+          color: "#28a745",
+          emoticon: "💼",
+        },
+        {
+          id: "colleague",
+          label_de: "Kollege",
+          label_en: "Colleague",
+          value: 60,
+          color: "#007bff",
+          emoticon: "👥",
+        },
+        {
+          id: "acquaintance",
+          label_de: "Bekanntschaft",
+          label_en: "Acquaintance",
+          value: 40,
+          color: "#ffc107",
+          emoticon: "🤝",
+        },
+      ];
+
+      await putSettings(settings);
+      renderCategories();
+
+      const successMsg = h("div", {
+        className: "success",
+        innerText: "Kategorien wurden auf Standard-Kategorien zurückgesetzt.",
+      });
+      messageContainer.appendChild(successMsg);
+      setTimeout(() => {
+        if (messageContainer.contains(successMsg)) {
+          messageContainer.removeChild(successMsg);
+        }
+      }, 3000);
+    }
+  });
+
+  buttonContainer.append(addButton, resetButton);
+
+  // Initial render
+  renderCategories();
+
+  section.append(title, helpText, buttonContainer, categoriesContainer);
+  return section;
+}
+
 // Function to show the main options interface
 async function showOptionsInterface(app: HTMLElement) {
   const s = await getSettings();
@@ -327,6 +807,15 @@ async function showOptionsInterface(app: HTMLElement) {
     )
   );
 
+  // Create message container for feedback
+  const messageContainer = h("div", { id: "message-container" });
+
+  // Create category management section
+  const categoryManagement = createCategoryManagementSection(
+    s,
+    messageContainer
+  );
+
   // Create export/import section
   const exportImport = h(
     "div",
@@ -394,9 +883,6 @@ async function showOptionsInterface(app: HTMLElement) {
   // Create save button container
   const buttonContainer = h("div", { className: "button-container" });
   const saveBtn = h("button", { innerText: "Speichern" });
-
-  // Create message container for feedback
-  const messageContainer = h("div", { id: "message-container" });
 
   saveBtn.addEventListener("click", async () => {
     const w_cat = parseFloat(
@@ -483,6 +969,7 @@ async function showOptionsInterface(app: HTMLElement) {
     title,
     weights,
     decay,
+    categoryManagement, // Add the new category management section
     exportImport,
     privacy,
     messageContainer,
