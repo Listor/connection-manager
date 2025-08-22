@@ -2,6 +2,19 @@
 
 A Chrome extension that helps you manage and track your LinkedIn connections with detailed scoring, categorization, and interaction history.
 
+## Getting Started
+
+### 🚀 Quick Installation (No Build Required)
+
+Since the `dist` folder is included in this repository, you can use the extension immediately without building anything:
+
+1. **Download or clone this repository**
+2. **Open Chrome** and go to `chrome://extensions/`
+3. **Enable "Developer mode"** (toggle in the top-right corner)
+4. **Click "Load unpacked"**
+5. **Select the `dist` folder** from this repository
+6. **Done!** The extension is now installed and ready to use
+
 ## Features
 
 ### 🔗 Connection Management
@@ -39,14 +52,24 @@ A Chrome extension that helps you manage and track your LinkedIn connections wit
 
 ## Installation
 
+### Option 1: Quick Install (Recommended)
+
+The `dist` folder is included in this repository, so you can use the extension immediately:
+
+1. **Download or clone this repository**
+2. **Open Chrome** and go to `chrome://extensions/`
+3. **Enable "Developer mode"** (toggle in the top-right corner)
+4. **Click "Load unpacked"**
+5. **Select the `dist` folder** from this repository
+
+### Option 2: Build from Source
+
+If you want to modify the extension or build the latest version:
+
 1. Clone or download this repository
 2. Run `npm install` to install dependencies
 3. Run `npm run build` to build the extension
-4. Load the `dist` folder as an unpacked extension in Chrome:
-   - Go to `chrome://extensions/`
-   - Enable "Developer mode"
-   - Click "Load unpacked"
-   - Select the `dist` folder
+4. Load the `dist` folder as an unpacked extension in Chrome (same steps as above)
 
 ## Usage
 
@@ -82,11 +105,13 @@ A Chrome extension that helps you manage and track your LinkedIn connections wit
 
 ## Development
 
+If you want to modify the extension code or contribute to the project:
+
 ```bash
 # Install dependencies
 npm install
 
-# Development build
+# Development build with hot reload
 npm run dev
 
 # Production build
@@ -98,6 +123,8 @@ npm run build:content
 # Build other components
 npm run build:others
 ```
+
+**Note**: The `dist` folder is included in the repository, so most users don't need to build anything. Only build if you're developing or modifying the extension.
 
 ## Data Structure
 
