@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     {
-      name: "copy-polyfill",
+      name: "copy-polyfill-and-manifest",
       writeBundle() {
         // Copy webextension-polyfill to the build directory
         const distDir = "dist-firefox";
@@ -28,8 +28,14 @@ export default defineConfig({
               "browser-polyfill.min.js"
             )
           );
+
+          // Ensure Firefox manifest is in place
+          copyFileSync(
+            "public-firefox/manifest.json",
+            join(distDir, "manifest.json")
+          );
         } catch (error) {
-          console.warn("Could not copy webextension-polyfill:", error);
+          console.warn("Could not copy files:", error);
         }
       },
     },
