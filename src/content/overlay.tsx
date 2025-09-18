@@ -18,6 +18,9 @@ import { eventScore, totalScore } from "../scoring/scoring";
 import type { ContactDoc, EventDoc, ExportBundleV1 } from "../types/index";
 import { extractDisplayName } from "./dom-selectors";
 import { getShadowDOMCSS } from "../styles/shadow-dom";
+// Use Chrome API with Firefox compatibility
+declare const browser: typeof chrome;
+const api = typeof browser !== "undefined" ? browser : chrome;
 
 let shadowRoot: ShadowRoot | null = null;
 let container: HTMLDivElement | null = null;
@@ -146,7 +149,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 // Message listener for IndexedDB requests from background script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "INDEXEDDB_REQUEST") {
     handleIndexedDBRequest(message.request).then(sendResponse);
     return true; // Keep message channel open for async response

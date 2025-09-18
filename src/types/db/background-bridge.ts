@@ -4,6 +4,9 @@ import type {
   SettingsDoc,
   ExportBundleV1,
 } from "../index";
+// Use Chrome API with Firefox compatibility
+declare const browser: typeof chrome;
+const api = typeof browser !== "undefined" ? browser : chrome;
 
 // Message types for communication with background script
 type MessageType =
@@ -32,11 +35,11 @@ interface MessageResponse {
 async function sendMessage(request: MessageRequest): Promise<MessageResponse> {
   console.log("Background bridge sending message:", request);
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(request, (response: MessageResponse) => {
+    api.runtime.sendMessage(request, (response: MessageResponse) => {
       console.log("Background bridge received response:", response);
-      if (chrome.runtime.lastError) {
-        console.error("Background bridge error:", chrome.runtime.lastError);
-        reject(new Error(chrome.runtime.lastError.message));
+      if (api.runtime.lastError) {
+        console.error("Background bridge error:", api.runtime.lastError);
+        reject(new Error(api.runtime.lastError.message));
       } else {
         resolve(response);
       }

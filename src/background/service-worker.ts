@@ -1,4 +1,7 @@
 import type { ExportBundleV1 } from "../types/index";
+// Use Chrome API with Firefox compatibility
+declare const browser: typeof chrome;
+const api = typeof browser !== "undefined" ? browser : chrome;
 
 // Message types for communication
 type MessageType =
@@ -24,7 +27,7 @@ interface MessageResponse {
 }
 
 // Handle messages from options page
-chrome.runtime.onMessage.addListener(
+api.runtime.onMessage.addListener(
   (request: MessageRequest, sender, sendResponse) => {
     handleMessage(request).then(sendResponse);
     return true; // Keep message channel open for async response
@@ -38,7 +41,7 @@ async function handleMessage(
     console.log("Background script received message:", request);
 
     // Get any tab on LinkedIn (not just active)
-    const tabs = await chrome.tabs.query({
+    const tabs = await api.tabs.query({
       url: "https://*.linkedin.com/*",
     });
 
@@ -55,7 +58,7 @@ async function handleMessage(
     console.log("Found LinkedIn tab:", linkedinTab.id);
 
     // Send message to content script on LinkedIn
-    const response = await chrome.tabs.sendMessage(linkedinTab.id!, {
+    const response = await api.tabs.sendMessage(linkedinTab.id!, {
       type: "INDEXEDDB_REQUEST",
       request: request,
     });
