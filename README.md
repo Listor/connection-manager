@@ -1,18 +1,29 @@
-# Connection Manager Chrome Extension
+# Connection Manager Browser Extension
 
-A Chrome extension that helps you manage and track your LinkedIn connections with detailed scoring, categorization, and interaction history.
+A browser extension that helps you manage and track your LinkedIn connections with detailed scoring, categorization, and interaction history. **Works in both Chrome and Firefox!**
 
 ## Getting Started
 
 ### 🚀 Quick Installation (No Build Required)
 
-Since the `dist` folder is included in this repository, you can use the extension immediately without building anything:
+Since the `dist` and `dist-firefox` folders are included in this repository, you can use the extension immediately without building anything:
+
+#### For Chrome:
 
 1. **Download or clone this repository**
 2. **Open Chrome** and go to `chrome://extensions/`
 3. **Enable "Developer mode"** (toggle in the top-right corner)
 4. **Click "Load unpacked"**
 5. **Select the `dist` folder** from this repository
+6. **Done!** The extension is now installed and ready to use
+
+#### For Firefox:
+
+1. **Download or clone this repository**
+2. **Open Firefox** and go to `about:debugging`
+3. **Click "This Firefox"** in the left sidebar
+4. **Click "Load Temporary Add-on"**
+5. **Select the `dist-firefox/manifest.json` file** from this repository
 6. **Done!** The extension is now installed and ready to use
 
 ## Features
@@ -54,7 +65,9 @@ Since the `dist` folder is included in this repository, you can use the extensio
 
 ### Option 1: Quick Install (Recommended)
 
-The `dist` folder is included in this repository, so you can use the extension immediately:
+The `dist` (Chrome) and `dist-firefox` (Firefox) folders are included in this repository, so you can use the extension immediately:
+
+#### Chrome Installation:
 
 1. **Download or clone this repository**
 2. **Open Chrome** and go to `chrome://extensions/`
@@ -62,14 +75,33 @@ The `dist` folder is included in this repository, so you can use the extension i
 4. **Click "Load unpacked"**
 5. **Select the `dist` folder** from this repository
 
+#### Firefox Installation:
+
+1. **Download or clone this repository**
+2. **Open Firefox** and go to `about:debugging`
+3. **Click "This Firefox"** in the left sidebar
+4. **Click "Load Temporary Add-on"**
+5. **Select the `dist-firefox/manifest.json` file** from this repository
+
 ### Option 2: Build from Source
 
 If you want to modify the extension or build the latest version:
 
-1. Clone or download this repository
-2. Run `npm install` to install dependencies
-3. Run `npm run build` to build the extension
-4. Load the `dist` folder as an unpacked extension in Chrome (same steps as above)
+#### For Chrome:
+
+```bash
+npm install
+npm run build
+# Load the 'dist' folder as an unpacked extension in Chrome
+```
+
+#### For Firefox:
+
+```bash
+npm install
+npm run build:firefox
+# Load the 'dist-firefox' folder as a temporary add-on in Firefox
+```
 
 ## Usage
 
@@ -97,11 +129,31 @@ If you want to modify the extension or build the latest version:
 
 ## Technical Details
 
-- **Manifest Version**: 3
+- **Manifest Version**: 3 (Chrome), 2 (Firefox)
 - **Storage**: IndexedDB (local)
 - **Languages**: German (default), English
 - **Build System**: Vite with TypeScript
 - **Database Schema**: Version 2 (supports emoticons)
+- **Cross-Browser**: Uses webextension-polyfill for Firefox compatibility
+
+## Browser Compatibility
+
+### Supported Browsers
+
+- **Chrome**: Manifest V3, full feature support
+- **Firefox**: Manifest V2, full feature support via webextension-polyfill
+
+### Key Differences
+
+- **Chrome**: Uses native Chrome extension APIs
+- **Firefox**: Uses webextension-polyfill for Chrome API compatibility
+- **Manifest**: Chrome uses V3, Firefox uses V2
+- **Background Script**: Chrome uses service worker, Firefox uses persistent script
+
+### Installation Differences
+
+- **Chrome**: Load unpacked extension from `dist/` folder
+- **Firefox**: Load temporary add-on from `dist-firefox/manifest.json`
 
 ## Development
 
@@ -114,17 +166,26 @@ npm install
 # Development build with hot reload
 npm run dev
 
-# Production build
+# Production build for Chrome
 npm run build
 
-# Build content script only
+# Production build for Firefox
+npm run build:firefox
+
+# Build content script only (Chrome)
 npm run build:content
 
-# Build other components
+# Build other components (Chrome)
 npm run build:others
+
+# Build content script only (Firefox)
+npm run build:firefox:content
+
+# Build other components (Firefox)
+npm run build:firefox:others
 ```
 
-**Note**: The `dist` folder is included in the repository, so most users don't need to build anything. Only build if you're developing or modifying the extension.
+**Note**: The `dist` (Chrome) and `dist-firefox` (Firefox) folders are included in the repository, so most users don't need to build anything. Only build if you're developing or modifying the extension.
 
 ## Data Structure
 
