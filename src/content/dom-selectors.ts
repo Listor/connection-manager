@@ -1,5 +1,20 @@
 import { normalizeLinkedInProfileUrl } from "./url-normalizer";
 
+// Locale-dependent fallback for older markup without ARIA hints (de/en)
+const ACTION_BUTTON_LABELS =
+  /^(abschnitt hinzufügen|add profile section|profil verbessern|enhance profile|profil bearbeiten|edit profile|anzeigen als|view as|open to|ressourcen|resources|kontaktinfo|contact info|mehr|more)$/i;
+
+export function isActionButtonLabel(text: string): boolean {
+  return ACTION_BUTTON_LABELS.test(text.replace(/\s+/g, " ").trim());
+}
+
+// Detects UI action buttons whose href is a bare profile URL.
+// Primary signal: aria-disabled marks link-shaped controls, not navigation links.
+function isActionButton(a: HTMLAnchorElement): boolean {
+  if (a.hasAttribute("aria-disabled") && !a.querySelector("img")) return true;
+  return isActionButtonLabel(a.textContent ?? "");
+}
+
 export function* findProfileAnchors(
   root: Document | HTMLElement
 ): Iterable<HTMLAnchorElement> {
@@ -11,6 +26,7 @@ export function* findProfileAnchors(
       "";
     const norm = normalizeLinkedInProfileUrl(href);
     if (!norm) continue;
+    if (isActionButton(a as HTMLAnchorElement)) continue;
     (a as HTMLAnchorElement).dataset.liNotesProfile = norm;
     yield a as HTMLAnchorElement;
   }
@@ -305,6 +321,19 @@ function extractNameFromNotificationLink(
 }
 
 /**
+ * Takes the first segment of a text before common separators and
+ * validates it as a plausible name.
+ */
+function firstTextSegment(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const first = text.split(/[•·\n\r\t]/)[0]?.trim();
+  if (first && first.length > 0 && first.length < 100) {
+    return first;
+  }
+  return null;
+}
+
+/**
  * Generic name extraction for unknown link types
  */
 function extractNameFromGenericLink(anchor: HTMLAnchorElement): string | null {
@@ -314,36 +343,42 @@ function extractNameFromGenericLink(anchor: HTMLAnchorElement): string | null {
   for (const selector of selectors) {
     const nameElement = anchor.querySelector(selector);
     if (nameElement) {
-      const name = nameElement.textContent?.trim();
-      if (name && name.length > 0) {
+      // aria-hidden span excludes screen-reader text and connection degree
+      const visibleSpan = nameElement.querySelector('span[aria-hidden="true"]');
+      const name = firstTextSegment(
+        (visibleSpan ?? nameElement).textContent
+      );
+      if (name) {
         return name;
       }
     }
   }
 
-  // If no specific name element found, try to extract from the element's immediate text
-  // but filter out common job title patterns
-  const fullText = anchor.textContent?.trim();
-  if (fullText) {
-    // Split by common separators and take the first part (usually the name)
-    const parts = fullText.split(/[•·\n\r\t]/);
-    const firstPart = parts[0]?.trim();
-    if (firstPart && firstPart.length > 0 && firstPart.length < 100) {
-      // Additional filtering: remove common job title patterns
-      const cleanName = firstPart
-        .replace(
-          /\s+(CEO|CTO|CFO|COO|VP|Director|Manager|Lead|Senior|Junior|Associate|Intern)\b.*$/i,
-          ""
-        )
-        .replace(/\s+at\s+.*$/i, "")
-        .replace(/\s+@\s+.*$/i, "")
-        .trim();
+  // The aria-hidden span holds only the visible name, without the headline
+  const ariaHiddenSpan = anchor.querySelector('span[aria-hidden="true"]');
+  const ariaHiddenName = firstTextSegment(ariaHiddenSpan?.textContent);
+  if (ariaHiddenName) {
+    return ariaHiddenName;
+  }
 
-      if (cleanName && cleanName.length > 0 && cleanName.length < 100) {
-        return cleanName;
-      }
-      return firstPart;
+  // innerText keeps the line break between name and headline; textContent doesn't
+  const fullText = anchor.innerText?.trim() || anchor.textContent?.trim();
+  const firstPart = firstTextSegment(fullText);
+  if (firstPart) {
+    // Additional filtering: remove common job title patterns
+    const cleanName = firstPart
+      .replace(
+        /\s+(CEO|CTO|CFO|COO|VP|Director|Manager|Lead|Senior|Junior|Associate|Intern)\b.*$/i,
+        ""
+      )
+      .replace(/\s+at\s+.*$/i, "")
+      .replace(/\s+@\s+.*$/i, "")
+      .trim();
+
+    if (cleanName && cleanName.length > 0 && cleanName.length < 100) {
+      return cleanName;
     }
+    return firstPart;
   }
 
   // If no name found in the anchor itself, search in the broader DOM context

@@ -32,7 +32,7 @@ ${sharedCss
   .join("\n")}
 
     /* Shadow DOM specific additions */
-    
+
     /* Anonymous mode overlay */
     .anonymous-overlay {
       position: absolute;
@@ -41,7 +41,7 @@ ${sharedCss
       right: 0;
       bottom: 0;
       background: #000;
-      border-radius: 2px;
+      border-radius: 4px;
       pointer-events: none;
     }
 
@@ -55,30 +55,38 @@ ${sharedCss
     }
 
     .dialog-buttons button.secondary {
-      background: var(--background-light);
+      background: transparent;
       border-color: var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    .dialog-buttons button.secondary:hover {
+      background: var(--surface-raised);
+      color: var(--text-primary);
     }
 
     /* Points grid for event dialogs */
     .points-grid {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 4px;
+      gap: 6px;
       margin-top: 4px;
     }
 
     .points-grid button {
       padding: 8px;
       border: 1px solid var(--border-color);
-      background: var(--background-light);
-      border-radius: 4px;
+      background: var(--surface-raised);
+      border-radius: 8px;
       cursor: pointer;
+      font-variant-numeric: tabular-nums;
     }
 
     .points-grid button.selected {
-      background: var(--linkedin-blue);
-      color: white;
-      border-color: var(--linkedin-blue);
+      background: linear-gradient(135deg, #7c7ff2, #5b8cf7);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35);
     }
 
     /* Events list specific styles */
@@ -86,8 +94,8 @@ ${sharedCss
       max-height: 200px;
       overflow-y: auto;
       border: 1px solid var(--border-color);
-      border-radius: 4px;
-      padding: 8px;
+      border-radius: 10px;
+      padding: 4px;
     }
 
     .event-item {
@@ -95,12 +103,16 @@ ${sharedCss
       justify-content: space-between;
       align-items: flex-start;
       padding: 8px;
-      border-bottom: 1px solid #eee;
+      border-radius: 8px;
       gap: 8px;
     }
 
-    .event-item:last-child {
-      border-bottom: none;
+    .event-item:hover {
+      background: var(--surface-raised);
+    }
+
+    .event-item + .event-item {
+      border-top: 1px solid var(--border-color);
     }
 
     .event-info {
@@ -108,7 +120,8 @@ ${sharedCss
     }
 
     .event-date {
-      font-weight: 500;
+      font-weight: 600;
+      font-size: 12px;
       color: var(--text-primary);
     }
 
@@ -118,58 +131,45 @@ ${sharedCss
     }
 
     .event-points {
-      color: var(--linkedin-blue);
-      font-weight: 500;
+      color: var(--accent);
+      font-weight: 600;
       font-size: 12px;
     }
 
     .event-note {
-      color: var(--text-secondary);
+      color: var(--text-muted);
       font-size: 11px;
       margin-top: 4px;
-      font-style: italic;
     }
 
     .delete-event {
-      background: var(--error-color);
-      color: white;
-      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
       border-radius: 50%;
       width: 20px;
       height: 20px;
-      font-size: 14px;
+      font-size: 13px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
       position: relative;
+      padding: 0;
     }
 
     .delete-event:hover {
-      background: #c82333;
+      background: var(--error-bg);
+      color: var(--error-color);
+      border-color: var(--error-border);
     }
 
     .no-events {
-      color: var(--text-secondary);
-      font-style: italic;
+      color: var(--text-muted);
       text-align: center;
       padding: 16px;
-    }
-
-    .category-gradient {
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 30%;
-      height: 100%;
-      opacity: 0.5;
-      pointer-events: none;
-      border-radius: 8px;
-    }
-
-    .dialog .category-gradient {
-      border-radius: 8px;
+      font-size: 12px;
     }
   \`;
 }

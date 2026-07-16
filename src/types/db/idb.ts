@@ -1,8 +1,11 @@
 import { DB_NAME, DB_VERSION } from "./schema";
 import type { ContactDoc, EventDoc, SettingsDoc } from "../index";
 
+let dbPromise: Promise<IDBDatabase> | null = null;
+
 export function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
@@ -20,9 +23,19 @@ export function openDb(): Promise<IDBDatabase> {
         s.createIndex("byTimestampDesc", "timestamp", { unique: false });
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      // Reopen lazily if the browser closes the connection
+      req.result.onclose = () => {
+        dbPromise = null;
+      };
+      resolve(req.result);
+    };
+    req.onerror = () => {
+      dbPromise = null;
+      reject(req.error);
+    };
   });
+  return dbPromise;
 }
 
 function tx(db: IDBDatabase, stores: string[], mode: IDBTransactionMode) {

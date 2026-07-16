@@ -16,12 +16,14 @@ import {
 } from "../types/db/idb";
 import { eventScore, totalScore } from "../scoring/scoring";
 import type { ContactDoc, EventDoc, ExportBundleV1 } from "../types/index";
-import { extractDisplayName } from "./dom-selectors";
+import { extractDisplayName, isActionButtonLabel } from "./dom-selectors";
+import { categoryIconSvg } from "./category-icons";
 import { getShadowDOMCSS } from "../styles/shadow-dom";
 
 let shadowRoot: ShadowRoot | null = null;
 let container: HTMLDivElement | null = null;
 let hideTimer: number | null = null;
+let exitTimer: number | null = null;
 let currentProfileUrl: string | null = null; // Track which profile is currently shown
 let currentAnchor: HTMLElement | null = null; // Track the current anchor element
 let optionsOverlay: HTMLDivElement | null = null; // Options overlay
@@ -249,16 +251,19 @@ function ensureOverlayHost() {
   shadowRoot!.append(style, container);
 }
 
-function positionOverlay(rect: DOMRect) {
+function positionOverlay(
+  rect: DOMRect,
+  size?: { width: number; height: number }
+) {
   if (!container) return;
 
   // Get viewport dimensions
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
 
-  // Estimate overlay dimensions
-  const overlayWidth = 380;
-  const overlayHeight = 140;
+  // Use measured overlay dimensions when available, estimate otherwise
+  const overlayWidth = size?.width || 380;
+  const overlayHeight = size?.height || 140;
 
   // Calculate position - simple offset from link
   let left = rect.left;
@@ -297,6 +302,23 @@ function positionOverlay(rect: DOMRect) {
   });
 }
 
+// Reposition using the rendered card's real size and the anchor's current rect
+function repositionToAnchor() {
+  if (!container || !currentAnchor || !container.firstElementChild) return;
+  const rect = currentAnchor.getBoundingClientRect();
+  const cardRect = (
+    container.firstElementChild as HTMLElement
+  ).getBoundingClientRect();
+  positionOverlay(rect, { width: cardRect.width, height: cardRect.height });
+}
+
+// Keep the overlay attached to its anchor while the page scrolls or resizes
+window.addEventListener("scroll", repositionToAnchor, {
+  capture: true,
+  passive: true,
+});
+window.addEventListener("resize", repositionToAnchor, { passive: true });
+
 function bandLabel(total: number): string {
   if (total <= 24) return "Schwach";
   if (total <= 49) return "Gering";
@@ -323,59 +345,143 @@ function getCategoryColor(categoryId: string, settings: any): string {
   return category?.color || "#ccc"; // Default gray if not found
 }
 
-function getCategoryEmoticon(categoryId: string, settings: any): string {
+function getCategoryLabel(categoryId: string, settings: any): string {
   const category = settings.categories.find((c: any) => c.id === categoryId);
-  return category?.emoticon || "🤝"; // Default emoticon if not found
+  return category?.label_de || categoryId;
 }
 
-// Function to refresh the overlay at the last known position
-async function refreshOverlayAtLastPosition() {
-  if (!currentAnchor || !currentProfileUrl) return;
+type CardData = {
+  profileUrl: string;
+  name: string;
+  scoreDisplay: string;
+  badgeDisplay: string;
+  interactionText: string;
+  categoryId: string;
+  categoryColor: string;
+  categoryLabel: string;
+  notes: string;
+  contact?: ContactDoc;
+};
 
-  // Get the current position of the anchor element
-  const rect = currentAnchor.getBoundingClientRect();
-  positionOverlay(rect);
+let currentCardData: CardData | null = null;
 
-  // Recreate the overlay content
+// The card element persists between skeleton and data render so the
+// entrance animation only plays once and listeners bind only once
+function ensureCard(): HTMLDivElement | null {
+  if (!container) return null;
+  let card = container.firstElementChild as HTMLDivElement | null;
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "card";
+    card.addEventListener("mouseenter", clearHide);
+    card.addEventListener("mouseleave", () => scheduleHide());
+    card.addEventListener("click", async (e) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "BUTTON" && currentCardData) {
+        const action = target.getAttribute("data-act");
+        await handleButtonClick(
+          action,
+          currentCardData.profileUrl,
+          currentCardData.contact,
+          currentCardData.name
+        );
+      }
+    });
+    container.appendChild(card);
+  }
+  return card;
+}
+
+function nameMarkup(name: string): string {
+  const value = name || '<span class="skeleton" style="width: 120px"></span>';
+  return `<div style="position: relative;">${value}${
+    anonymousMode ? '<div class="anonymous-overlay"></div>' : ""
+  }</div>`;
+}
+
+// Placeholder card rendered synchronously so the tooltip appears instantly
+function renderCardSkeleton(name: string) {
+  const card = ensureCard();
+  if (!card) return;
+  currentCardData = null;
+  card.innerHTML = `
+    <div class="category-accent"></div>
+    <div class="card-content">
+      <div class="row">${nameMarkup(name)}<div class="score"><span class="skeleton" style="width: 36px"></span></div></div>
+      <div class="interaction-row">
+        <div class="interaction-text"><span class="skeleton" style="width: 150px"></span></div>
+        <span class="skeleton" style="width: 26px; height: 26px; border-radius: 8px;"></span>
+      </div>
+      <div class="small"></div>
+    </div>
+    <div class="button-row">
+      <button data-act="add-evt" disabled>Interaktion +</button>
+      <button data-act="add-note" disabled>Notiz +</button>
+      <button data-act="details" disabled>Details</button>
+    </div>
+  `;
+  repositionToAnchor();
+}
+
+function renderCard(data: CardData) {
+  const card = ensureCard();
+  if (!card) return;
+  currentCardData = data;
+  card.innerHTML = `
+    <div class="category-accent" style="background: ${data.categoryColor}"></div>
+    <div class="card-content">
+      <div class="row">${nameMarkup(data.name)}<div class="score"><span class="score-number">${data.scoreDisplay}</span><span class="score-badge">${data.badgeDisplay}</span></div></div>
+      <div class="interaction-row">
+        <div class="interaction-text">${data.interactionText}</div>
+        <span class="category-chip" title="${data.categoryLabel}" style="color: ${data.categoryColor}; background: color-mix(in srgb, ${data.categoryColor} 14%, transparent); border-color: color-mix(in srgb, ${data.categoryColor} 35%, transparent);">${categoryIconSvg(data.categoryId)}</span>
+      </div>
+      <div class="small">${data.notes}</div>
+    </div>
+    <div class="button-row">
+      <button data-act="add-evt">Interaktion +</button>
+      <button data-act="add-note">Notiz +</button>
+      <button data-act="details">Details</button>
+    </div>
+  `;
+  repositionToAnchor();
+}
+
+// Loads the contact and computes everything the card displays
+async function loadCardData(
+  anchor: HTMLElement,
+  profileUrl: string
+): Promise<CardData> {
   const db = await openDb();
   const settings = await getSettings(db);
-  let contact = (await getContact(db, currentProfileUrl)) as
-    | ContactDoc
-    | undefined;
-  const events = await listEventsFor(db, currentProfileUrl);
+  let contact = (await getContact(db, profileUrl)) as ContactDoc | undefined;
+  const events = await listEventsFor(db, profileUrl);
 
-  // Extract name using improved selectors
   let name = contact?.displayName;
-  const extractedName = extractDisplayName(currentAnchor as HTMLAnchorElement);
+  // Repair records saved from action buttons before they were filtered out
+  if (name && isActionButtonLabel(name)) name = undefined;
 
+  // Stored names are write-once; extraction only fills missing names
   if (!name) {
-    if (extractedName && !contact) {
-      contact = {
-        profileUrl: currentProfileUrl,
-        displayName: extractedName,
-        categoryId: "acquaintance",
-        affinity: 0,
-      };
-      await putContact(db, contact);
-      name = extractedName;
-    } else if (extractedName) {
-      name = extractedName;
-    }
-  } else if (extractedName && extractedName !== name && contact) {
-    if (extractedName.length < name.length || !name.includes(extractedName)) {
-      contact.displayName = extractedName;
+    const extractedName = extractDisplayName(anchor as HTMLAnchorElement);
+    if (extractedName) {
+      if (contact) {
+        contact.displayName = extractedName;
+      } else {
+        contact = {
+          profileUrl,
+          displayName: extractedName,
+          categoryId: "acquaintance",
+          affinity: 0,
+        };
+      }
       await putContact(db, contact);
       name = extractedName;
     }
   }
 
   if (!name) {
-    name = currentAnchor.textContent?.trim() || "—";
+    name = anchor.textContent?.trim() || "—";
   }
-
-  // Calculate score
-  let scoreDisplay: string;
-  let badgeDisplay: string;
 
   const eScore = eventScore(events, new Date(), settings.decay);
   const categoryValue = contact
@@ -388,6 +494,8 @@ async function refreshOverlayAtLastPosition() {
   const hasCustomCategory =
     contact?.categoryId && contact.categoryId !== "acquaintance";
 
+  let scoreDisplay: string;
+  let badgeDisplay: string;
   if (!hasEvents && !hasAffinity && !hasCustomCategory) {
     scoreDisplay = "N/A";
     badgeDisplay = "";
@@ -397,206 +505,59 @@ async function refreshOverlayAtLastPosition() {
     badgeDisplay = `<span class="badge">${bandLabel(total)}</span>`;
   }
 
-  const categoryColor = getCategoryColor(
-    contact?.categoryId || "acquaintance",
-    settings
-  );
+  const categoryId = contact?.categoryId || "acquaintance";
 
-  const categoryEmoticon = getCategoryEmoticon(
-    contact?.categoryId || "acquaintance",
-    settings
-  );
+  return {
+    profileUrl,
+    name,
+    scoreDisplay,
+    badgeDisplay,
+    interactionText: events.length
+      ? `Letzte Interaktion: ${new Date(
+          Math.max(...events.map((e) => +new Date(e.timestamp)))
+        ).toLocaleDateString()}`
+      : "Keine Interaktionen",
+    categoryId,
+    categoryColor: getCategoryColor(categoryId, settings),
+    categoryLabel: getCategoryLabel(categoryId, settings),
+    notes: contact?.notes ? contact.notes.split("\n")[0] : "",
+    contact,
+  };
+}
 
-  if (!container) return;
-
-  container.innerHTML = "";
-  const card = document.createElement("div");
-  card.className = "card";
-  card.style.position = "relative";
-  card.innerHTML = `
-    <div class="card-content">
-            <div class="row"><div style="position: relative;">${name}${
-    anonymousMode ? '<div class="anonymous-overlay"></div>' : ""
-  }</div><div class="score"><span class="score-number">${scoreDisplay}</span><span class="score-badge">${badgeDisplay}</span></div></div>
-      <div class="interaction-row">
-        <div class="interaction-text">${
-          events.length
-            ? `Letzte Interaktion: ${new Date(
-                Math.max(...events.map((e) => +new Date(e.timestamp)))
-              ).toLocaleDateString()}`
-            : "Keine Interaktionen"
-        }</div>
-        <div class="category-emoticon">${categoryEmoticon}</div>
-      </div>
-      <div class="small">${
-        contact?.notes ? contact.notes.split("\n")[0] : ""
-      }</div>
-    </div>
-    <div class="button-row">
-      <button data-act="add-evt">Interaktion +</button>
-      <button data-act="add-note">Notiz +</button>
-      <button data-act="details">Details</button>
-    </div>
-    <div class="category-gradient" style="background: linear-gradient(to right, transparent 0%, ${categoryColor}40 70%, ${categoryColor}80 100%);"></div>
-  `;
-
-  // Add mouse events to the overlay
-  card.addEventListener("mouseenter", clearHide);
-  card.addEventListener("mouseleave", () => {
-    scheduleHide();
-  });
-
-  // Add click handlers for buttons
-  card.addEventListener("click", async (e) => {
-    const target = e.target as HTMLElement;
-    if (target.tagName === "BUTTON") {
-      const action = target.getAttribute("data-act");
-      if (currentProfileUrl) {
-        await handleButtonClick(action, currentProfileUrl, contact, name);
-      }
-    }
-  });
-
-  container.appendChild(card);
+async function refreshOverlayAtLastPosition() {
+  if (!currentAnchor || !currentProfileUrl) return;
+  const profileUrl = currentProfileUrl;
+  const anchor = currentAnchor;
+  const data = await loadCardData(anchor, profileUrl);
+  if (currentProfileUrl !== profileUrl || currentAnchor !== anchor) return;
+  renderCard(data);
 }
 
 export async function showOverlay(anchor: HTMLElement, profileUrl: string) {
   ensureOverlayHost();
   if (!container || !shadowRoot) return;
 
-  // Clear any existing hide timer
   clearHide();
 
-  // Store the current profile URL and anchor element
+  // Moving between anchors of the same profile keeps the visible card
+  const alreadyVisible =
+    currentProfileUrl === profileUrl && container.childElementCount > 0;
   currentProfileUrl = profileUrl;
   currentAnchor = anchor;
-
-  const rect = anchor.getBoundingClientRect();
-  positionOverlay(rect);
-
-  const db = await openDb();
-  const settings = await getSettings(db);
-  let contact = (await getContact(db, profileUrl)) as ContactDoc | undefined;
-  const events = await listEventsFor(db, profileUrl);
-
-  // Extract name using improved selectors
-  let name = contact?.displayName;
-  const extractedName = extractDisplayName(anchor as HTMLAnchorElement);
-
-  if (!name) {
-    // If we found a name and don't have a contact yet, create one
-    if (extractedName && !contact) {
-      contact = {
-        profileUrl,
-        displayName: extractedName,
-        categoryId: "acquaintance", // default category
-        affinity: 0, // start with 0 points
-      };
-      await putContact(db, contact);
-      name = extractedName;
-    } else if (extractedName) {
-      name = extractedName;
-    }
-  } else if (extractedName && extractedName !== name && contact) {
-    // If we have a stored name but found a better one, update it
-    if (extractedName.length < name.length || !name.includes(extractedName)) {
-      contact.displayName = extractedName;
-      await putContact(db, contact);
-      name = extractedName;
-    }
+  if (alreadyVisible) {
+    repositionToAnchor();
+    return;
   }
 
-  // Fallback if no name found
-  if (!name) {
-    name = anchor.textContent?.trim() || "—";
-  }
+  // Instant feedback with whatever the DOM already provides
+  renderCardSkeleton(extractDisplayName(anchor as HTMLAnchorElement) ?? "");
 
-  // Calculate score only if there's meaningful data
-  let scoreDisplay: string;
-  let badgeDisplay: string;
+  const data = await loadCardData(anchor, profileUrl);
 
-  const eScore = eventScore(events, new Date(), settings.decay);
-  const categoryValue = contact
-    ? settings.categories.find((c) => c.id === contact.categoryId)?.value ?? 0
-    : 0;
-  const affinity = contact?.affinity ?? 0;
-
-  // Check if there's meaningful data to show a score
-  const hasEvents = events.length > 0;
-  const hasAffinity = affinity > 0;
-  const hasCustomCategory =
-    contact?.categoryId && contact.categoryId !== "acquaintance";
-
-  if (!hasEvents && !hasAffinity && !hasCustomCategory) {
-    // No meaningful data - show N/A
-    scoreDisplay = "N/A";
-    badgeDisplay = "";
-  } else {
-    // Calculate actual score
-    const total = totalScore(categoryValue, eScore, affinity, settings.weights);
-    scoreDisplay = total.toString();
-    badgeDisplay = `<span class="badge">${bandLabel(total)}</span>`;
-  }
-
-  // Get category color for gradient
-  const categoryColor = getCategoryColor(
-    contact?.categoryId || "acquaintance",
-    settings
-  );
-
-  // Get category emoticon
-  const categoryEmoticon = getCategoryEmoticon(
-    contact?.categoryId || "acquaintance",
-    settings
-  );
-
-  container.innerHTML = "";
-  const card = document.createElement("div");
-  card.className = "card";
-  card.style.position = "relative";
-  card.innerHTML = `
-    <div class="card-content">
-            <div class="row"><div style="position: relative;">${name}${
-    anonymousMode ? '<div class="anonymous-overlay"></div>' : ""
-  }</div><div class="score"><span class="score-number">${scoreDisplay}</span><span class="score-badge">${badgeDisplay}</span></div></div>
-      <div class="interaction-row">
-        <div class="interaction-text">${
-          events.length
-            ? `Letzte Interaktion: ${new Date(
-                Math.max(...events.map((e) => +new Date(e.timestamp)))
-              ).toLocaleDateString()}`
-            : "Keine Interaktionen"
-        }</div>
-        <div class="category-emoticon">${categoryEmoticon}</div>
-      </div>
-      <div class="small">${
-        contact?.notes ? contact.notes.split("\n")[0] : ""
-      }</div>
-    </div>
-    <div class="button-row">
-      <button data-act="add-evt">Interaktion +</button>
-      <button data-act="add-note">Notiz +</button>
-      <button data-act="details">Details</button>
-    </div>
-    <div class="category-gradient" style="background: linear-gradient(to right, transparent 0%, ${categoryColor}40 70%, ${categoryColor}80 100%);"></div>
-  `;
-
-  // Add mouse events to the overlay
-  card.addEventListener("mouseenter", clearHide);
-  card.addEventListener("mouseleave", () => {
-    scheduleHide();
-  });
-
-  // Add click handlers for buttons
-  card.addEventListener("click", async (e) => {
-    const target = e.target as HTMLElement;
-    if (target.tagName === "BUTTON") {
-      const action = target.getAttribute("data-act");
-      await handleButtonClick(action, profileUrl, contact, name);
-    }
-  });
-
-  container.appendChild(card);
+  // Skip rendering if a newer hover superseded this one during the DB load
+  if (currentProfileUrl !== profileUrl || currentAnchor !== anchor) return;
+  renderCard(data);
 }
 
 async function handleButtonClick(
@@ -642,12 +603,13 @@ async function showAddEventDialog(profileUrl: string, name: string) {
   dialog.innerHTML = `
       <h3>Interaktion hinzufügen</h3>
       <div class="dialog-row">
-                <label>Für: <span style="position: relative;">${name}${
+        <label>Für</label>
+        <div style="position: relative; font-size: 13px; font-weight: 600;">${name}${
     anonymousMode ? '<div class="anonymous-overlay"></div>' : ""
-  }</span></label>
+  }</div>
       </div>
       <div class="dialog-row">
-        <label for="event-type">Typ:</label>
+        <label for="event-type">Typ</label>
         <select id="event-type">
           <option value="meeting">Treffen</option>
           <option value="call">Telefonat</option>
@@ -655,7 +617,7 @@ async function showAddEventDialog(profileUrl: string, name: string) {
         </select>
       </div>
       <div class="dialog-row">
-        <label>Bewertung:</label>
+        <label>Bewertung</label>
         <div class="points-grid">
           <button data-points="1">1</button>
           <button data-points="2">2</button>
@@ -665,21 +627,20 @@ async function showAddEventDialog(profileUrl: string, name: string) {
         </div>
       </div>
            <div class="dialog-row">
-         <label for="event-datetime">Datum & Uhrzeit:</label>
+         <label for="event-datetime">Datum & Uhrzeit</label>
          <input type="datetime-local" id="event-datetime" />
        </div>
        <div class="dialog-row">
-         <label for="event-note">Notiz (optional):</label>
+         <label for="event-note">Notiz (optional)</label>
          <textarea id="event-note" placeholder="Details zur Interaktion..."></textarea>
        </div>
       <div class="dialog-buttons">
         <button class="secondary" id="cancel-event">Abbrechen</button>
         <button class="primary" id="save-event">Speichern</button>
       </div>
-      <div class="category-gradient" style="background: linear-gradient(to right, transparent 0%, ${categoryColor}40 70%, ${categoryColor}80 100%);"></div>
+      <div class="category-accent" style="background: ${categoryColor};"></div>
     `;
 
-  // Make dialog position relative for gradient
   dialog.style.position = "relative";
 
   dialogOverlay.appendChild(dialog);
@@ -788,7 +749,7 @@ async function showAddNoteDialog(
   dialog.innerHTML = `
        <h3>Notiz bearbeiten</h3>
        <div class="dialog-row">
-         <label for="contact-note">Notiz:</label>
+         <label for="contact-note">Notiz</label>
          <textarea id="contact-note" placeholder="Notizen zu diesem Kontakt...">${currentNote}</textarea>
        </div>
        <div class="dialog-buttons">
@@ -800,10 +761,9 @@ async function showAddNoteDialog(
          }
          <button class="primary" id="save-note">Speichern</button>
        </div>
-       <div class="category-gradient" style="background: linear-gradient(to right, transparent 0%, ${categoryColor}40 70%, ${categoryColor}80 100%);"></div>
+       <div class="category-accent" style="background: ${categoryColor};"></div>
      `;
 
-  // Make dialog position relative for gradient
   dialog.style.position = "relative";
 
   dialogOverlay.appendChild(dialog);
@@ -943,19 +903,20 @@ async function showDetailsDialog(
   dialog.innerHTML = `
       <h3>Kontakt Details</h3>
       <div class="dialog-row">
-        <label>Name:</label>
-                <div style="position: relative;">${name}${
-    anonymousMode ? '<div class="anonymous-overlay"></div>' : ""
-  }</div>
+        <label for="contact-name">Name</label>
+        <div style="position: relative;">
+          <input type="text" id="contact-name" />
+          ${anonymousMode ? '<div class="anonymous-overlay"></div>' : ""}
+        </div>
       </div>
       <div class="dialog-row">
-        <label>URL:</label>
-        <div style="word-break: break-all; font-size: 12px; color: #666; position: relative;">${profileUrl}${
+        <label>URL</label>
+        <div class="url-text" style="position: relative;">${profileUrl}${
     anonymousMode ? '<div class="anonymous-overlay"></div>' : ""
   }</div>
       </div>
            <div class="dialog-row">
-         <label for="contact-category">Kategorie:</label>
+         <label for="contact-category">Kategorie</label>
          <select id="contact-category">
            ${settings.categories
              .map(
@@ -971,7 +932,7 @@ async function showDetailsDialog(
          </select>
        </div>
       <div class="dialog-row">
-        <label>Empfinden:</label>
+        <label>Empfinden</label>
         <div style="display: flex; align-items: center; gap: 12px;">
           <input 
             type="range" 
@@ -987,13 +948,13 @@ async function showDetailsDialog(
         </div>
       </div>
       <div class="dialog-row">
-        <label>Notizen:</label>
+        <label>Notizen</label>
         <div style="white-space: pre-wrap; max-height: 100px; overflow-y: auto;">${
           contact?.notes || "Keine"
         }</div>
       </div>
       <div class="dialog-row">
-        <label>Interaktionen (${events.length}):</label>
+        <label>Interaktionen (${events.length})</label>
         <div class="events-list">
           ${eventsList}
         </div>
@@ -1003,23 +964,54 @@ async function showDetailsDialog(
       </div>
     `;
 
-  // Add category gradient to the dialog
+  // Add category accent to the dialog
   const categoryColor = getCategoryColor(
     contact?.categoryId || "acquaintance",
     settings
   );
   dialog.style.position = "relative";
-  const gradientElement = document.createElement("div");
-  gradientElement.className = "category-gradient";
-  gradientElement.id = "details-category-gradient";
-  gradientElement.style.background = `linear-gradient(to right, transparent 0%, ${categoryColor}40 70%, ${categoryColor}80 100%)`;
-  dialog.appendChild(gradientElement);
+  const accentElement = document.createElement("div");
+  accentElement.className = "category-accent";
+  accentElement.id = "details-category-accent";
+  accentElement.style.background = categoryColor;
+  dialog.appendChild(accentElement);
 
   dialogOverlay.appendChild(dialog);
   shadowRoot.appendChild(dialogOverlay);
 
   // Event handlers
   const closeBtn = dialog.querySelector("#close-details") as HTMLButtonElement;
+  const nameInput = dialog.querySelector("#contact-name") as HTMLInputElement;
+  // Value set via property, not markup, so names with quotes stay intact
+  nameInput.value = name;
+
+  nameInput.addEventListener("change", async () => {
+    const newName = nameInput.value.trim();
+    if (!newName || newName === name) {
+      nameInput.value = name;
+      return;
+    }
+    try {
+      let contact = await getContact(db, profileUrl);
+      if (!contact) {
+        contact = {
+          profileUrl,
+          displayName: newName,
+          categoryId: "acquaintance",
+          affinity: 0,
+        };
+      } else {
+        contact.displayName = newName;
+      }
+      await putContact(db, contact);
+      name = newName;
+      await refreshOverlayAtLastPosition();
+    } catch (error) {
+      console.error("Error updating name:", error);
+      alert("Fehler beim Aktualisieren des Namens");
+    }
+  });
+
   const categorySelect = dialog.querySelector(
     "#contact-category"
   ) as HTMLSelectElement;
@@ -1056,13 +1048,15 @@ async function showDetailsDialog(
       // This prevents the flicker by not recreating the entire dialog
       contact = await getContact(db, profileUrl);
 
-      // Update the category gradient immediately
-      const gradientElement = dialog.querySelector(
-        "#details-category-gradient"
+      // Update the category accent immediately
+      const accentElement = dialog.querySelector(
+        "#details-category-accent"
       ) as HTMLElement;
-      if (gradientElement) {
-        const newColor = getCategoryColor(newCategoryId, settings);
-        gradientElement.style.background = `linear-gradient(to right, transparent 0%, ${newColor}40 70%, ${newColor}80 100%)`;
+      if (accentElement) {
+        accentElement.style.background = getCategoryColor(
+          newCategoryId,
+          settings
+        );
       }
     } catch (error) {
       console.error("Error updating category:", error);
@@ -1138,6 +1132,12 @@ function clearHide() {
     clearTimeout(hideTimer);
     hideTimer = null;
   }
+  if (exitTimer) {
+    clearTimeout(exitTimer);
+    exitTimer = null;
+  }
+  // Cancel an in-flight exit animation when the pointer returns
+  container?.firstElementChild?.classList.remove("card-out");
   // Remove bridge when clearing hide
   const bridge = document.getElementById("li-notes-bridge");
   if (bridge) {
@@ -1147,14 +1147,23 @@ function clearHide() {
 
 export function scheduleHide() {
   hideTimer = window.setTimeout(() => {
-    if (container) container.innerHTML = "";
-    // Remove bridge when hiding overlay
-    const bridge = document.getElementById("li-notes-bridge");
-    if (bridge) {
-      bridge.remove();
+    const finish = () => {
+      if (container) container.innerHTML = "";
+      const bridge = document.getElementById("li-notes-bridge");
+      if (bridge) {
+        bridge.remove();
+      }
+      currentProfileUrl = null;
+      currentAnchor = null;
+      currentCardData = null;
+    };
+    const card = container?.firstElementChild as HTMLElement | null;
+    if (card) {
+      card.classList.add("card-out");
+      exitTimer = window.setTimeout(finish, 140);
+    } else {
+      finish();
     }
-    currentProfileUrl = null;
-    currentAnchor = null; // Clear the current anchor when hiding
   }, 200); // 200ms delay
 }
 
@@ -1262,25 +1271,28 @@ function openOptionsOverlay() {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(8, 9, 12, 0.6);
+    backdrop-filter: blur(4px);
     z-index: 2147483646;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   `;
 
   // Create options container
   const optionsContainer = document.createElement("div");
   optionsContainer.style.cssText = `
-    background: white;
-    border-radius: 8px;
+    background: #14161d;
+    color: #f2f4f8;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
     padding: 24px;
     max-width: 600px;
     width: 90%;
     max-height: 80vh;
     overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
     position: relative;
   `;
 
@@ -1295,7 +1307,7 @@ function openOptionsOverlay() {
     border: none;
     font-size: 24px;
     cursor: pointer;
-    color: #666;
+    color: #a3abbd;
     width: 30px;
     height: 30px;
     display: flex;
@@ -1306,7 +1318,7 @@ function openOptionsOverlay() {
   `;
 
   closeBtn.onmouseenter = () => {
-    closeBtn.style.backgroundColor = "#f0f0f0";
+    closeBtn.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
   };
 
   closeBtn.onmouseleave = () => {
@@ -1370,9 +1382,10 @@ async function initOptionsContent(container: HTMLDivElement) {
     title.textContent = "Connection Manager Einstellungen";
     title.style.cssText = `
       margin: 0 0 24px 0;
-      font-size: 24px;
+      font-size: 20px;
       font-weight: 600;
-      color: #333;
+      letter-spacing: -0.01em;
+      color: #f2f4f8;
       text-align: center;
     `;
 
@@ -1381,20 +1394,22 @@ async function initOptionsContent(container: HTMLDivElement) {
     weightsSection.style.cssText = `
       margin-bottom: 32px;
       padding: 20px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      background: #fafafa;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
     `;
 
     const weightsTitle = document.createElement("h2");
     weightsTitle.textContent = "Gewichte";
     weightsTitle.style.cssText = `
       margin: 0 0 16px 0;
-      font-size: 18px;
+      font-size: 13px;
       font-weight: 600;
-      color: #333;
-      border-bottom: 2px solid #0073b1;
-      padding-bottom: 8px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #a3abbd;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 10px;
     `;
 
     // Create weight inputs
@@ -1410,7 +1425,7 @@ async function initOptionsContent(container: HTMLDivElement) {
         display: block;
         margin-bottom: 6px;
         font-weight: 500;
-        color: #333;
+        color: #a3abbd;
       `;
 
       const input = document.createElement("input");
@@ -1421,16 +1436,18 @@ async function initOptionsContent(container: HTMLDivElement) {
       input.style.cssText = `
         width: 120px;
         padding: 8px 12px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        font-size: 13px;
+        background: rgba(255, 255, 255, 0.05);
+        color: #f2f4f8;
       `;
 
       const helpText = document.createElement("div");
       helpText.textContent = `Gewichtung für ${label.toLowerCase()} (0-1)`;
       helpText.style.cssText = `
         font-size: 12px;
-        color: #666;
+        color: #737d91;
         margin-top: 4px;
         font-style: italic;
       `;
@@ -1457,20 +1474,22 @@ async function initOptionsContent(container: HTMLDivElement) {
     decaySection.style.cssText = `
       margin-bottom: 32px;
       padding: 20px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      background: #fafafa;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
     `;
 
     const decayTitle = document.createElement("h2");
     decayTitle.textContent = "Verfall";
     decayTitle.style.cssText = `
       margin: 0 0 16px 0;
-      font-size: 18px;
+      font-size: 13px;
       font-weight: 600;
-      color: #333;
-      border-bottom: 2px solid #0073b1;
-      padding-bottom: 8px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #a3abbd;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 10px;
     `;
 
     // Decay inputs
@@ -1491,7 +1510,7 @@ async function initOptionsContent(container: HTMLDivElement) {
         display: block;
         margin-bottom: 6px;
         font-weight: 500;
-        color: #333;
+        color: #a3abbd;
       `;
 
       const input = document.createElement("input");
@@ -1501,16 +1520,18 @@ async function initOptionsContent(container: HTMLDivElement) {
       input.style.cssText = `
         width: 120px;
         padding: 8px 12px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        font-size: 13px;
+        background: rgba(255, 255, 255, 0.05);
+        color: #f2f4f8;
       `;
 
       const helpEl = document.createElement("div");
       helpEl.textContent = helpText;
       helpEl.style.cssText = `
         font-size: 12px;
-        color: #666;
+        color: #737d91;
         margin-top: 4px;
         font-style: italic;
       `;
@@ -1533,7 +1554,7 @@ async function initOptionsContent(container: HTMLDivElement) {
       display: block;
       margin-bottom: 6px;
       font-weight: 500;
-      color: #333;
+      color: #a3abbd;
     `;
 
     const modeSelect = document.createElement("select");
@@ -1541,9 +1562,11 @@ async function initOptionsContent(container: HTMLDivElement) {
     modeSelect.style.cssText = `
       width: 120px;
       padding: 8px 12px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      font-size: 13px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #f2f4f8;
     `;
 
     ["exponential", "linear", "off"].forEach((mode) => {
@@ -1558,7 +1581,7 @@ async function initOptionsContent(container: HTMLDivElement) {
     modeHelp.textContent = "Art des Verfalls: exponential, linear oder aus";
     modeHelp.style.cssText = `
       font-size: 12px;
-      color: #666;
+      color: #737d91;
       margin-top: 4px;
       font-style: italic;
     `;
@@ -1591,20 +1614,22 @@ async function initOptionsContent(container: HTMLDivElement) {
     privacySection.style.cssText = `
       margin-bottom: 32px;
       padding: 20px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      background: #fafafa;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
     `;
 
     const privacyTitle = document.createElement("h2");
     privacyTitle.textContent = "Datenschutz";
     privacyTitle.style.cssText = `
       margin: 0 0 16px 0;
-      font-size: 18px;
+      font-size: 13px;
       font-weight: 600;
-      color: #333;
-      border-bottom: 2px solid #0073b1;
-      padding-bottom: 8px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #a3abbd;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 10px;
     `;
 
     const privacyDiv = document.createElement("div");
@@ -1620,6 +1645,7 @@ async function initOptionsContent(container: HTMLDivElement) {
       margin-right: 12px;
       width: 18px;
       height: 18px;
+      accent-color: #7c7ff2;
     `;
 
     const privacyLabel = document.createElement("label");
@@ -1627,7 +1653,7 @@ async function initOptionsContent(container: HTMLDivElement) {
     privacyLabel.htmlFor = "anonymous-mode";
     privacyLabel.style.cssText = `
       font-weight: 500;
-      color: #333;
+      color: #a3abbd;
       cursor: pointer;
     `;
 
@@ -1636,7 +1662,7 @@ async function initOptionsContent(container: HTMLDivElement) {
       "Überdeckt alle Namen auf LinkedIn mit einem geblurten schwarzen Balken";
     privacyHelp.style.cssText = `
       font-size: 12px;
-      color: #666;
+      color: #737d91;
       margin-top: 8px;
       font-style: italic;
     `;
@@ -1652,20 +1678,22 @@ async function initOptionsContent(container: HTMLDivElement) {
     exportSection.style.cssText = `
       margin-bottom: 32px;
       padding: 20px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      background: #fafafa;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
     `;
 
     const exportTitle = document.createElement("h2");
     exportTitle.textContent = "Daten Export/Import";
     exportTitle.style.cssText = `
       margin: 0 0 16px 0;
-      font-size: 18px;
+      font-size: 13px;
       font-weight: 600;
-      color: #333;
-      border-bottom: 2px solid #0073b1;
-      padding-bottom: 8px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #a3abbd;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 10px;
     `;
 
     const buttonContainer = document.createElement("div");
@@ -1677,56 +1705,41 @@ async function initOptionsContent(container: HTMLDivElement) {
       flex-wrap: wrap;
     `;
 
-    const exportBtn = document.createElement("button");
-    exportBtn.textContent = "Daten exportieren";
-    exportBtn.style.cssText = `
-      background: #0073b1;
-      color: white;
-      border: none;
+    const ghostButtonCss = `
+      background: rgba(255, 255, 255, 0.05);
+      color: #f2f4f8;
+      border: 1px solid rgba(255, 255, 255, 0.12);
       padding: 12px 24px;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
       font-weight: 500;
-      transition: background-color 0.2s;
+      transition: background 0.15s ease, border-color 0.15s ease;
     `;
+
+    const exportBtn = document.createElement("button");
+    exportBtn.textContent = "Daten exportieren";
+    exportBtn.style.cssText = ghostButtonCss;
 
     const importBtn = document.createElement("button");
     importBtn.textContent = "Daten importieren";
-    importBtn.style.cssText = `
-      background: #155724;
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 500;
-      transition: background-color 0.2s;
-    `;
+    importBtn.style.cssText = ghostButtonCss;
 
     const testBtn = document.createElement("button");
     testBtn.textContent = "DB Test";
-    testBtn.style.cssText = `
-      background: #666;
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 500;
-      transition: background-color 0.2s;
-    `;
+    testBtn.style.cssText = ghostButtonCss;
 
     const saveBtn = document.createElement("button");
     saveBtn.textContent = "Speichern";
     saveBtn.style.cssText = `
-      background: #28a745;
-      color: white;
+      background: linear-gradient(135deg, #7c7ff2, #5b8cf7);
+      color: #fff;
       border: none;
       padding: 12px 24px;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
-      font-weight: 500;
-      transition: background-color 0.2s;
+      font-weight: 600;
+      box-shadow: 0 2px 12px rgba(99, 102, 241, 0.35);
+      transition: filter 0.15s ease;
     `;
 
     // Message container
@@ -1940,13 +1953,21 @@ async function initOptionsContent(container: HTMLDivElement) {
       const msgDiv = document.createElement("div");
       msgDiv.textContent = message;
       msgDiv.style.cssText = `
-        color: ${type === "success" ? "#155724" : "#dc3545"};
-        font-size: 14px;
+        color: ${type === "success" ? "#4ade80" : "#f87171"};
+        font-size: 13px;
         margin-top: 8px;
         padding: 8px 12px;
-        background: ${type === "success" ? "#d4edda" : "#f8d7da"};
-        border: 1px solid ${type === "success" ? "#c3e6cb" : "#f5c6cb"};
-        border-radius: 4px;
+        background: ${
+          type === "success"
+            ? "rgba(74, 222, 128, 0.12)"
+            : "rgba(248, 113, 113, 0.12)"
+        };
+        border: 1px solid ${
+          type === "success"
+            ? "rgba(74, 222, 128, 0.3)"
+            : "rgba(248, 113, 113, 0.3)"
+        };
+        border-radius: 8px;
       `;
       container.appendChild(msgDiv);
 

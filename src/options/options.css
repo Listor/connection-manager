@@ -3,44 +3,49 @@
 
 body {
   margin: 0;
-  padding: 20px;
-  background: var(--background-light);
+  padding: 24px;
+  background: #0d0f14;
   color: var(--text-primary);
   line-height: 1.5;
 }
 
 #app {
-  max-width: 600px;
+  max-width: 620px;
   margin: 0 auto;
-  background: white;
-  border-radius: 8px;
-  padding: 24px;
-  box-shadow: 0 4px 16px var(--shadow-light);
+  background: var(--surface-solid);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 h1 {
-  margin: 0 0 24px 0;
-  font-size: 24px;
+  margin: 0 0 28px 0;
+  font-size: 20px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
   text-align: center;
 }
 
 h2 {
   margin: 0 0 16px 0;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
-  border-bottom: 2px solid var(--linkedin-blue);
-  padding-bottom: 8px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
 }
 
 .section {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
   padding: 20px;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--background-lighter);
+  border-radius: 12px;
+  background: var(--surface-raised);
 }
 
 .section:last-child {
@@ -82,13 +87,13 @@ h2 {
   height: 18px;
   margin: 0;
   cursor: pointer;
+  accent-color: var(--accent);
 }
 
 .checkbox-row label {
   flex: 1;
   margin-bottom: 0;
   cursor: pointer;
-  font-weight: 500;
 }
 
 .button-row {
@@ -102,63 +107,44 @@ h2 {
   max-width: 200px;
 }
 
-.export-btn {
-  background: var(--linkedin-blue);
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.export-btn:hover:not(:disabled) {
-  background: var(--linkedin-blue-dark);
-}
-
-.export-btn:disabled {
-  background: var(--border-color);
-  cursor: not-allowed;
-}
-
+.export-btn,
 .import-btn {
-  background: var(--success-color);
-  color: white;
+  background: linear-gradient(135deg, #7c7ff2, #5b8cf7);
+  color: #fff;
   border: none;
   padding: 12px 24px;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  font-weight: 600;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.35);
+  transition: filter 0.15s ease;
 }
 
+.export-btn:hover:not(:disabled),
 .import-btn:hover:not(:disabled) {
-  background: var(--success-color-dark);
-}
-
-.import-btn:disabled {
-  background: var(--border-color);
-  cursor: not-allowed;
+  filter: brightness(1.08);
 }
 
 .db-test-btn {
-  background: var(--text-secondary);
-  color: white;
-  border: none;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
   padding: 12px 24px;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 500;
-  transition: background-color 0.2s;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .db-test-btn:hover:not(:disabled) {
-  background: var(--text-primary);
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
 }
 
+.export-btn:disabled,
+.import-btn:disabled,
 .db-test-btn:disabled {
-  background: var(--border-color);
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -179,15 +165,15 @@ h2 {
   align-items: center;
   padding: 12px;
   margin-bottom: 8px;
-  background: white;
+  background: var(--surface-raised);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  transition: all 0.2s;
+  border-radius: 10px;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .category-item:hover {
-  border-color: var(--linkedin-blue);
-  box-shadow: 0 2px 8px var(--shadow-light);
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
 }
 
 .category-labels {
@@ -202,97 +188,49 @@ h2 {
 }
 
 .category-actions button {
-  border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
   font-size: 12px;
-  padding: 4px 8px;
+  padding: 4px 10px;
 }
 
 .edit-btn {
-  background: var(--linkedin-blue);
-  color: white;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid transparent;
 }
 
 .edit-btn:hover {
-  background: var(--linkedin-blue-dark);
+  border-color: var(--accent);
 }
 
 .delete-btn {
-  background: var(--danger-color, #dc3545);
-  color: white;
+  background: var(--error-bg);
+  color: var(--error-color);
+  border: 1px solid transparent;
 }
 
 .delete-btn:hover:not(:disabled) {
-  background: var(--danger-color-dark, #c82333);
+  border-color: var(--error-border);
 }
 
 .delete-btn:disabled {
-  background: var(--border-color);
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 /* Dialog Styles */
 .dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 1000;
 }
 
 .dialog {
-  background: white;
-  padding: 24px;
-  border-radius: 8px;
   min-width: 400px;
   max-width: 500px;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: 0 8px 32px var(--shadow-dark);
-}
-
-.dialog h3 {
-  margin: 0 0 20px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
 }
 
 .category-form .form-group {
   margin-bottom: 20px;
-}
-
-.category-form label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.category-form input,
-.category-form select,
-.category-form textarea {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  font-size: 14px;
-  transition: border-color 0.2s;
-}
-
-.category-form input:focus,
-.category-form select:focus,
-.category-form textarea:focus {
-  outline: none;
-  border-color: var(--linkedin-blue);
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
 .category-form textarea {
@@ -303,24 +241,6 @@ h2 {
 /* Message Styles */
 #message-container {
   margin-top: 16px;
-}
-
-.success {
-  background: var(--success-color);
-  color: white;
-  padding: 12px 16px;
-  border-radius: 6px;
-  margin-bottom: 8px;
-  font-weight: 500;
-}
-
-.error {
-  background: var(--danger-color, #dc3545);
-  color: white;
-  padding: 12px 16px;
-  border-radius: 6px;
-  margin-bottom: 8px;
-  font-weight: 500;
 }
 
 /* Responsive design */
