@@ -136,13 +136,15 @@ label {
   width: 400px;
   overflow: hidden;
   color: var(--text-primary);
-  animation: card-in 0.15s cubic-bezier(0.2, 0.8, 0.3, 1);
+  transform-origin: 14px 14px;
+  animation: card-in 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
+/* The card expands out of the bubble sitting at its top-left corner */
 @keyframes card-in {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.98);
+    transform: scale(0.25);
   }
 }
 
@@ -154,8 +156,50 @@ label {
 @keyframes card-out {
   to {
     opacity: 0;
-    transform: translateY(4px) scale(0.98);
+    transform: scale(0.6);
   }
+}
+
+/* Hover bubble that opens the card on click */
+.details-bubble {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: bubble-in 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
+  transition: color 0.15s ease, border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+/* Fades up out of the element it belongs to */
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.details-bubble:hover {
+  color: var(--accent);
+  border-color: var(--border-strong);
+  background: var(--surface-solid);
+}
+
+.details-bubble svg {
+  width: 15px;
+  height: 15px;
+  pointer-events: none;
 }
 
 /* Category accent bar (card and dialogs) */

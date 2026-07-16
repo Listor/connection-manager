@@ -19,6 +19,9 @@ import type { ContactDoc, EventDoc, ExportBundleV1 } from "../types/index";
 import { extractDisplayName, isActionButtonLabel } from "./dom-selectors";
 import { categoryIconSvg } from "./category-icons";
 import { getShadowDOMCSS } from "../styles/shadow-dom";
+// Use Chrome API with Firefox compatibility
+declare const browser: typeof chrome;
+const api = typeof browser !== "undefined" ? browser : chrome;
 
 let shadowRoot: ShadowRoot | null = null;
 let container: HTMLDivElement | null = null;
@@ -28,6 +31,13 @@ let currentProfileUrl: string | null = null; // Track which profile is currently
 let currentAnchor: HTMLElement | null = null; // Track the current anchor element
 let optionsOverlay: HTMLDivElement | null = null; // Options overlay
 let anonymousMode = false; // Track anonymous mode setting
+let bubbleEl: HTMLDivElement | null = null; // Small hover bubble that opens the card
+let bubbleAnchor: HTMLElement | null = null;
+let bubbleProfileUrl: string | null = null;
+let bubbleHideTimer: number | null = null;
+// Where the card sits relative to its anchor — captured from the bubble
+// position at click time so the card expands out of the bubble
+let cardOffset: { dx: number; dy: number } | null = null;
 
 // Function to create anonymous overlay element
 function createAnonymousOverlay(): HTMLElement {
@@ -148,7 +158,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 // Message listener for IndexedDB requests from background script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "INDEXEDDB_REQUEST") {
     handleIndexedDBRequest(message.request).then(sendResponse);
     return true; // Keep message channel open for async response
@@ -265,9 +275,16 @@ function positionOverlay(
   const overlayWidth = size?.width || 380;
   const overlayHeight = size?.height || 140;
 
-  // Calculate position - simple offset from link
-  let left = rect.left;
-  let top = rect.top + rect.height + 10; // 10px below the link
+  let left: number;
+  let top: number;
+  if (cardOffset) {
+    // Card opens at the bubble's position and follows the anchor on scroll
+    left = rect.left + cardOffset.dx;
+    top = rect.top + cardOffset.dy;
+  } else {
+    left = rect.left;
+    top = rect.top + rect.height + 10; // 10px below the link
+  }
 
   // Adjust if overlay would go off-screen to the left
   if (left < 12) {
@@ -279,9 +296,11 @@ function positionOverlay(
     left = viewportWidth - overlayWidth - 12;
   }
 
-  // If overlay would go off-screen at the bottom, position it above the link
+  // If overlay would go off-screen at the bottom, move it up
   if (top + overlayHeight > viewportHeight - 12) {
-    top = rect.top - overlayHeight - 10; // 10px above the link
+    top = cardOffset
+      ? viewportHeight - overlayHeight - 12
+      : rect.top - overlayHeight - 10; // 10px above the link
   }
 
   // Ensure it doesn't go off-screen at the top
@@ -312,12 +331,109 @@ function repositionToAnchor() {
   positionOverlay(rect, { width: cardRect.width, height: cardRect.height });
 }
 
+const detailsIconSvg = `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="10"></circle>
+    <line x1="12" y1="16" x2="12" y2="12"></line>
+    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+  </svg>
+`;
+
+function positionBubble() {
+  if (!bubbleEl || !bubbleAnchor) return;
+  const rect = bubbleAnchor.getBoundingClientRect();
+  const width = bubbleEl.offsetWidth || 28;
+  const height = bubbleEl.offsetHeight || 28;
+
+  // Above the top-left corner of the link
+  let left = rect.left;
+  let top = rect.top - height - 6;
+
+  if (left < 4) left = 4;
+  if (left + width > window.innerWidth - 4) {
+    left = window.innerWidth - width - 4;
+  }
+  // Flip below the link when there is no room above
+  if (top < 4) top = rect.bottom + 6;
+
+  bubbleEl.style.left = `${left}px`;
+  bubbleEl.style.top = `${top}px`;
+}
+
+function hideBubble() {
+  clearBubbleHide();
+  bubbleAnchor = null;
+  bubbleProfileUrl = null;
+  if (bubbleEl) bubbleEl.style.display = "none";
+}
+
+function clearBubbleHide() {
+  if (bubbleHideTimer) {
+    clearTimeout(bubbleHideTimer);
+    bubbleHideTimer = null;
+  }
+}
+
+export function scheduleBubbleHide() {
+  clearBubbleHide();
+  // Delay long enough to travel from the link into the bubble
+  bubbleHideTimer = window.setTimeout(hideBubble, 250);
+}
+
+export function showBubble(anchor: HTMLElement, profileUrl: string) {
+  ensureOverlayHost();
+  if (!shadowRoot) return;
+
+  // No bubble while a card is open
+  if (container && container.childElementCount > 0) return;
+
+  clearBubbleHide();
+
+  if (!bubbleEl) {
+    bubbleEl = document.createElement("div");
+    bubbleEl.className = "details-bubble";
+    bubbleEl.title = "Details anzeigen";
+    bubbleEl.innerHTML = detailsIconSvg;
+    bubbleEl.addEventListener("mouseenter", clearBubbleHide);
+    bubbleEl.addEventListener("mouseleave", () => scheduleBubbleHide());
+    bubbleEl.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const targetAnchor = bubbleAnchor;
+      const targetUrl = bubbleProfileUrl;
+      // The card expands out of the bubble's position
+      const origin = {
+        left: parseFloat(bubbleEl!.style.left) || 0,
+        top: parseFloat(bubbleEl!.style.top) || 0,
+      };
+      hideBubble();
+      if (targetAnchor && targetUrl) {
+        showOverlay(targetAnchor, targetUrl, origin);
+      }
+    });
+    shadowRoot.appendChild(bubbleEl);
+  }
+
+  bubbleAnchor = anchor;
+  bubbleProfileUrl = profileUrl;
+  bubbleEl.style.display = "flex";
+  // Restart the fade-up animation on every appearance
+  bubbleEl.style.animation = "none";
+  void bubbleEl.offsetWidth;
+  bubbleEl.style.animation = "";
+  positionBubble();
+}
+
 // Keep the overlay attached to its anchor while the page scrolls or resizes
-window.addEventListener("scroll", repositionToAnchor, {
+function repositionAll() {
+  repositionToAnchor();
+  positionBubble();
+}
+window.addEventListener("scroll", repositionAll, {
   capture: true,
   passive: true,
 });
-window.addEventListener("resize", repositionToAnchor, { passive: true });
+window.addEventListener("resize", repositionAll, { passive: true });
 
 function bandLabel(total: number): string {
   if (total <= 24) return "Schwach";
@@ -534,11 +650,20 @@ async function refreshOverlayAtLastPosition() {
   renderCard(data);
 }
 
-export async function showOverlay(anchor: HTMLElement, profileUrl: string) {
+export async function showOverlay(
+  anchor: HTMLElement,
+  profileUrl: string,
+  origin?: { left: number; top: number }
+) {
   ensureOverlayHost();
   if (!container || !shadowRoot) return;
 
   clearHide();
+
+  if (origin) {
+    const rect = anchor.getBoundingClientRect();
+    cardOffset = { dx: origin.left - rect.left, dy: origin.top - rect.top };
+  }
 
   // Moving between anchors of the same profile keeps the visible card
   const alreadyVisible =
@@ -1145,27 +1270,43 @@ function clearHide() {
   }
 }
 
-export function scheduleHide() {
-  hideTimer = window.setTimeout(() => {
-    const finish = () => {
-      if (container) container.innerHTML = "";
-      const bridge = document.getElementById("li-notes-bridge");
-      if (bridge) {
-        bridge.remove();
-      }
-      currentProfileUrl = null;
-      currentAnchor = null;
-      currentCardData = null;
-    };
-    const card = container?.firstElementChild as HTMLElement | null;
-    if (card) {
-      card.classList.add("card-out");
-      exitTimer = window.setTimeout(finish, 140);
-    } else {
-      finish();
+function hideCardNow() {
+  const finish = () => {
+    if (container) container.innerHTML = "";
+    const bridge = document.getElementById("li-notes-bridge");
+    if (bridge) {
+      bridge.remove();
     }
-  }, 200); // 200ms delay
+    currentProfileUrl = null;
+    currentAnchor = null;
+    currentCardData = null;
+    cardOffset = null;
+  };
+  const card = container?.firstElementChild as HTMLElement | null;
+  if (card) {
+    card.classList.add("card-out");
+    exitTimer = window.setTimeout(finish, 140);
+  } else {
+    finish();
+  }
 }
+
+export function scheduleHide() {
+  hideTimer = window.setTimeout(hideCardNow, 200); // 200ms delay
+}
+
+// The card opens via click, so it also closes on a click outside of it
+document.addEventListener(
+  "click",
+  (e) => {
+    if (!container || container.childElementCount === 0) return;
+    const host = document.getElementById("li-notes-overlay-host");
+    if (host && e.composedPath().includes(host)) return;
+    clearHide();
+    hideCardNow();
+  },
+  true
+);
 
 // Export function to check if an element is related to the current profile
 export function isRelatedToCurrentProfile(element: HTMLElement): boolean {

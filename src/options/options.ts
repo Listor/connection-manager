@@ -11,6 +11,9 @@ import {
 } from "../types/db/background-bridge";
 import type { ExportBundleV1 } from "../types/index";
 import "./options.css";
+// Use Chrome API with Firefox compatibility
+declare const browser: typeof chrome;
+const api = typeof browser !== "undefined" ? browser : chrome;
 
 function h<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -930,12 +933,12 @@ async function showOptionsInterface(app: HTMLElement) {
 
       // Notify content script about settings update
       try {
-        const tabs = await chrome.tabs.query({
+        const tabs = await api.tabs.query({
           url: "https://*.linkedin.com/*",
         });
         tabs.forEach((tab) => {
           if (tab.id) {
-            chrome.tabs.sendMessage(tab.id, { type: "SETTINGS_UPDATED" });
+            api.tabs.sendMessage(tab.id, { type: "SETTINGS_UPDATED" });
           }
         });
       } catch (error) {
