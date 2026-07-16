@@ -1,12 +1,14 @@
 {
   "name": "connection-manager",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run build:css && tsc -b && npm run build:content && npm run build:others",
-    "build:firefox": "npm run build:css && tsc -b && npm run build:firefox:content && npm run build:firefox:others",
+    "build": "npm run build:version && npm run build:css && tsc -b && npm run build:content && npm run build:others",
+    "build:firefox": "npm run build:version && npm run build:css && tsc -b && npm run build:firefox:others && npm run build:firefox:content",
+    "build:all": "npm run build && npm run build:firefox",
+    "build:version": "node scripts/sync-version.js",
     "build:css": "node scripts/build-css.js",
     "build:content": "vite build --config vite.content.config.ts",
     "build:others": "vite build --config vite.others.config.ts",

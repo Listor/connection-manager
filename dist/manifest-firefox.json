@@ -1,22 +1,34 @@
 {
   "manifest_version": 2,
   "name": "Connection Manager",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Lokale Zusatzinfos & Score für LinkedIn-Kontakte (IndexedDB, JSON Import/Export)",
-  "permissions": ["storage", "activeTab", "https://*.linkedin.com/*"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "https://*.linkedin.com/*"
+  ],
   "background": {
-    "scripts": ["src/background/service-worker.js"],
+    "scripts": [
+      "src/background/service-worker.js"
+    ],
     "persistent": false
   },
   "content_scripts": [
     {
-      "matches": ["https://*.linkedin.com/*"],
-      "js": ["src/content/content.js"],
+      "matches": [
+        "https://*.linkedin.com/*"
+      ],
+      "js": [
+        "src/content/content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "options_page": "options.html",
-  "web_accessible_resources": ["src/styles/shared.css"],
+  "web_accessible_resources": [
+    "src/styles/shared.css"
+  ],
   "browser_specific_settings": {
     "gecko": {
       "id": "connection-manager@example.com",
