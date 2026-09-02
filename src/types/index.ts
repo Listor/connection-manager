@@ -50,6 +50,7 @@ export interface SettingsDoc {
 
 export interface ContactDoc {
   profileUrl: string; // canonical key
+  aliasUrls?: string[]; // same person under other URLs (hashed /in/ACoAA... ids)
   displayName: string;
   categoryId: string; // exactly one
   affinity: number; // 0–100

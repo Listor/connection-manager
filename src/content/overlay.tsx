@@ -16,7 +16,7 @@ import {
 } from "../types/db/idb";
 import { eventScore, totalScore } from "../scoring/scoring";
 import type { ContactDoc, EventDoc, ExportBundleV1 } from "../types/index";
-import { extractDisplayName, isActionButtonLabel } from "./dom-selectors";
+import { extractDisplayName, isJunkName } from "./dom-selectors";
 import { categoryIconSvg } from "./category-icons";
 import { getShadowDOMCSS } from "../styles/shadow-dom";
 // Use Chrome API with Firefox compatibility
@@ -573,8 +573,8 @@ async function loadCardData(
   const events = await listEventsFor(db, profileUrl);
 
   let name = contact?.displayName;
-  // Repair records saved from action buttons before they were filtered out
-  if (name && isActionButtonLabel(name)) name = undefined;
+  // Repair records saved with polluted names (action labels, a11y text)
+  if (name && isJunkName(name)) name = undefined;
 
   // Stored names are write-once; extraction only fills missing names
   if (!name) {

@@ -17,6 +17,16 @@ export function openDb(): Promise<IDBDatabase> {
         s.createIndex("byName", "displayName", { unique: false });
         s.createIndex("byCategory", "categoryId", { unique: false });
       }
+      // v3: alias lookup for hashed message URLs pointing at the same person
+      {
+        const s = req.transaction!.objectStore("contacts");
+        if (!s.indexNames.contains("byAlias")) {
+          s.createIndex("byAlias", "aliasUrls", {
+            unique: false,
+            multiEntry: true,
+          });
+        }
+      }
       if (!db.objectStoreNames.contains("events")) {
         const s = db.createObjectStore("events", { keyPath: "id" });
         s.createIndex("byProfileUrl", "profileUrl", { unique: false });
@@ -107,6 +117,71 @@ export function getContact(
   return new Promise((res, rej) => {
     req.onsuccess = () => res(req.result as ContactDoc | undefined);
     req.onerror = () => rej(req.error);
+  });
+}
+
+// Finds a contact by its canonical URL or any of its alias URLs
+export async function getContactByUrlOrAlias(
+  db: IDBDatabase,
+  url: string
+): Promise<ContactDoc | undefined> {
+  const direct = await getContact(db, url);
+  if (direct) return direct;
+  const t = tx(db, ["contacts"], "readonly");
+  const idx = t.objectStore("contacts").index("byAlias");
+  const req = idx.get(url);
+  return new Promise((res, rej) => {
+    req.onsuccess = () => res(req.result as ContactDoc | undefined);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+// Records url as an alias of the contact unless it is already known
+export async function addAliasUrl(
+  db: IDBDatabase,
+  contact: ContactDoc,
+  url: string
+): Promise<void> {
+  if (contact.profileUrl === url) return;
+  if (contact.aliasUrls?.includes(url)) return;
+  contact.aliasUrls = [...(contact.aliasUrls ?? []), url];
+  await putContact(db, contact);
+}
+
+// Exact-name lookup via index, with a case-insensitive scan as fallback.
+// Message surfaces only expose the display name, not the profile URL.
+export async function findContactsByName(
+  db: IDBDatabase,
+  name: string
+): Promise<ContactDoc[]> {
+  const trimmed = name.replace(/\s+/g, " ").trim();
+  if (!trimmed) return [];
+
+  const t = tx(db, ["contacts"], "readonly");
+  const idx = t.objectStore("contacts").index("byName");
+  const req = idx.getAll(trimmed);
+  const exact = await new Promise<ContactDoc[]>((res, rej) => {
+    req.onsuccess = () => res((req.result as ContactDoc[]) || []);
+    req.onerror = () => rej(req.error);
+  });
+  if (exact.length > 0) return exact;
+
+  const lower = trimmed.toLowerCase();
+  const all = await getAllContacts(db);
+  return all.filter(
+    (c) => c.displayName?.replace(/\s+/g, " ").trim().toLowerCase() === lower
+  );
+}
+
+export function deleteContact(
+  db: IDBDatabase,
+  profileUrl: string
+): Promise<void> {
+  const t = tx(db, ["contacts"], "readwrite");
+  t.objectStore("contacts").delete(profileUrl);
+  return new Promise((res, rej) => {
+    t.oncomplete = () => res();
+    t.onerror = () => rej(t.error);
   });
 }
 

@@ -8,6 +8,21 @@ export function isActionButtonLabel(text: string): boolean {
   return ACTION_BUTTON_LABELS.test(text.replace(/\s+/g, " ").trim());
 }
 
+// Screen-reader phrases and presence labels that leaked into stored names
+// from message anchors before message-specific extraction existed (de/en)
+const JUNK_NAME_PATTERNS = [
+  /profil von .+ anzeigen/i,
+  /view .+ profile/i,
+  /^status:/i,
+];
+
+export function isJunkName(text: string): boolean {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (!t) return true;
+  if (isActionButtonLabel(t)) return true;
+  return JUNK_NAME_PATTERNS.some((p) => p.test(t));
+}
+
 // Detects UI action buttons whose href is a bare profile URL.
 // Primary signal: aria-disabled marks link-shaped controls, not navigation links.
 function isActionButton(a: HTMLAnchorElement): boolean {
@@ -16,7 +31,7 @@ function isActionButton(a: HTMLAnchorElement): boolean {
 }
 
 export function* findProfileAnchors(
-  root: Document | HTMLElement
+  root: Document | HTMLElement | ShadowRoot
 ): Iterable<HTMLAnchorElement> {
   const anchors = root.querySelectorAll('a[href*="/in/"]');
   for (const a of Array.from(anchors)) {
@@ -33,9 +48,28 @@ export function* findProfileAnchors(
 }
 
 /**
- * Main function that determines the link type and delegates to specialized extractors
+ * Main function that determines the link type and delegates to specialized
+ * extractors. Raw results are refined so screen-reader phrases never pass
+ * as names, regardless of which markup variant produced them.
  */
 export function extractDisplayName(anchor: HTMLAnchorElement): string | null {
+  return refineExtractedName(extractDisplayNameRaw(anchor));
+}
+
+// The new messaging surfaces use obfuscated class names, so a11y phrases
+// like "Profil von X anzeigen" can reach the generic extractor as plain
+// text. Recover the name from the phrase instead of storing it verbatim.
+function refineExtractedName(raw: string | null): string | null {
+  if (!raw) return null;
+  const t = raw.replace(/\s+/g, " ").trim();
+  const m =
+    t.match(/^Profil von (.+) anzeigen$/i) ||
+    t.match(/^View (.+?)(?:['’]s)? profile$/i);
+  if (m?.[1]) return m[1].trim();
+  return isJunkName(t) ? null : t;
+}
+
+function extractDisplayNameRaw(anchor: HTMLAnchorElement): string | null {
   const linkType = determineLinkType(anchor);
 
   switch (linkType) {
@@ -105,8 +139,14 @@ function determineLinkType(anchor: HTMLAnchorElement): string {
 
   // Check for message links
   if (
+    anchor.classList.contains("msg-s-event-listitem__link") ||
+    anchor.classList.contains("msg-thread__link-to-profile") ||
+    anchor.querySelector(".msg-s-message-group__name") ||
+    anchor.querySelector(".msg-entity-lockup__entity-title") ||
     anchor.querySelector(".msg-conversations-container__name") ||
-    anchor.querySelector(".msg-conversation-card__participant-name")
+    anchor.querySelector(".msg-conversation-card__participant-name") ||
+    anchor.querySelector(".msg-conversation-listitem__participant-names") ||
+    anchor.querySelector(".msg-conversation-card__participant-names")
   ) {
     return "message";
   }
@@ -279,18 +319,34 @@ function extractNameFromConnectionLink(
  */
 function extractNameFromMessageLink(anchor: HTMLAnchorElement): string | null {
   const selectors = [
+    ".msg-s-message-group__name",
+    ".msg-entity-lockup__entity-title",
     ".msg-conversations-container__name",
     ".msg-conversation-card__participant-name",
+    ".msg-conversation-listitem__participant-names",
+    ".msg-conversation-card__participant-names",
   ];
 
   for (const selector of selectors) {
     const nameElement = anchor.querySelector(selector);
     if (nameElement) {
-      const name = nameElement.textContent?.trim();
+      const name = nameElement.textContent?.replace(/\s+/g, " ").trim();
       if (name && name.length > 0) {
         return name;
       }
     }
+  }
+
+  // Avatar links carry the name only in their screen-reader text (de/en)
+  const a11yText = anchor
+    .querySelector(".a11y-text")
+    ?.textContent?.replace(/\s+/g, " ")
+    .trim();
+  if (a11yText) {
+    const m =
+      a11yText.match(/^Profil von (.+) anzeigen$/i) ||
+      a11yText.match(/^View (.+?)(?:['’]s)? profile$/i);
+    if (m?.[1]) return m[1].trim();
   }
 
   return null;
